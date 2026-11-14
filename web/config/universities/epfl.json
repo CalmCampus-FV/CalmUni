@@ -22,6 +22,10 @@
       "en": "Feedback on the CalmCampus preview (EPFL)"
     }
   },
+  "privacyPrinciples": {
+    "fr": "Nous suivons les principes de conception de la nLPD suisse et du RGPD : minimisation des données, limitation des finalités, transparence et maîtrise par l'utilisateur. C'est une déclaration sur la conception de l'application. Ce n'est ni une certification ni un audit.",
+    "en": "We follow the design principles of the Swiss nLPD and the GDPR: data minimisation, purpose limitation, transparency and user control. This is a statement of how the app is designed. It is not a certification or an audit."
+  },
   "questions": [
     {
       "id": "sleep",
