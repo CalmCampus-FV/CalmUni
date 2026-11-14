@@ -118,6 +118,11 @@ async function supportLinks(p, ok, conf, lang, L) {
     if (s.contact.email) ok(hrefs.includes(`mailto:${s.contact.email}`), `${L}: ${id} email link`);
     const site = loc(s.contact.link, lang, cfg.defaultLanguage);
     if (site) ok(hrefs.includes(site), `${L}: ${id} website link`);
+    const note = s.contact.linkNote?.[lang];
+    if (note && site) {
+      const label = await p.locator(`section.service[aria-labelledby="s-${id}"] a[href="${site}"]`).first().textContent();
+      ok((label ?? "").includes(typography(note, lang)), `${L}: ${id} website button says "${note}"`);
+    }
     if (s.contact.phone) ok(hrefs.includes(`tel:${s.contact.phone.replace(/\s/g, "")}`), `${L}: ${id} phone link`);
   }
   const tels = await p.locator(".emergency a.call").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
@@ -349,6 +354,9 @@ async function languageFlows(name, browserType, device) {
     await go("#/privacy");
     ok(await backText() === T(lang, "checkin.back"), `${L}: the privacy page's back button says "${T(lang, "checkin.back")}" (got "${await backText()}")`);
     await rules(p, ok, lang, `${L} privacy`);
+    const privacyText = await p.evaluate(() => document.body.textContent);
+    ok(privacyText.includes(cfg.privacyPrinciples ? C(lang, cfg.privacyPrinciples) : T(lang, "privacy.principles")), `${L}: the privacy page states the design principles`);
+    if (cfg.privacyNote) ok(privacyText.includes(C(lang, cfg.privacyNote)), `${L}: the privacy page gives the privacy line`);
 
     // Feedback and Start over
     await go("#/about");
@@ -436,22 +444,66 @@ async function pageFlows(name, browserType, device) {
     await p.goto(`${base}?lang=${lang}`);
     await p.waitForSelector("[data-welcome]");
     if (cfg.welcomeNote) ok((await p.evaluate(() => document.body.textContent)).includes(C(lang, cfg.welcomeNote)), `${L}: the welcome screen says what this preview is`);
+    if (cfg.privacyNote) ok((await p.evaluate(() => document.body.textContent)).includes(C(lang, cfg.privacyNote)), `${L}: the welcome screen gives the privacy line`);
     for (const pid of cfg.welcomeLinks ?? []) ok(Boolean(await p.$(`a[href="#/${pid}"]`)), `${L}: the welcome screen links to ${pid}`);
     for (const pg of cfg.pages ?? []) {
       await go(`#${pg.id}`);
       ok(await h1() === C(lang, pg.title), `${L}: #${pg.id} opens "${C(lang, pg.title)}" (got ${await h1()})`);
       await rules(p, ok, lang, `${L} page ${pg.id}`);
       ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${L}: page ${pg.id} fits the screen`);
+      if (await p.$(".table-card")) {
+        for (const width of [320, 390, 479, 480, 768]) {
+          await p.setViewportSize({ width, height: 700 }); await p.waitForTimeout(60);
+          const over = await p.$$eval(".table-card, .table-card .table-wrap", (els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).length);
+          ok(over === 0 && await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${L}: page ${pg.id}: tables fit at ${width} px without scrolling sideways`);
+        }
+        await p.setViewportSize(device.viewport); await p.waitForTimeout(60);
+      }
       const tables = (pg.blocks ?? []).flatMap((b) => (b.table ? [b.table] : b.box ? b.box.filter((x) => x.table).map((x) => x.table) : []));
       const shown = await p.$$eval(".table-card", (cards) => cards.map((c) => ({ demo: Boolean(c.querySelector(".pill.demo")), text: c.textContent })));
       ok(shown.length === tables.length, `${L}: page ${pg.id} shows its ${tables.length} table(s)`);
       tables.forEach((tb, i) => {
         if (tb.label === "example") ok(shown[i]?.demo && shown[i].text.includes(T(lang, "demo.label")), `${L}: page ${pg.id}: made-up numbers are labelled ${T(lang, "demo.label")}`);
-        else ok((shown[i]?.text ?? "").includes(C(lang, tb.note)), `${L}: page ${pg.id}: targets say they are proposed, not results`);
+        else if (tb.label === "target") ok((shown[i]?.text ?? "").includes(C(lang, tb.note)), `${L}: page ${pg.id}: targets say they are proposed, not results`);
       });
+      // A concept mockup: every screen says it is not built, and nothing is switched on by default.
+      for (const cn of (pg.blocks ?? []).filter((b) => b.concept).map((b) => b.concept)) {
+        for (let i = 0; i < cn.screens.length; i++) {
+          await p.click(`[data-concept-step="${i}"]`); await settle();
+          const lab = ((await p.textContent(".concept-label")) ?? "").trim();
+          ok(lab === C(lang, cn.label) && await p.isVisible(".concept-label"), `${L}: concept screen ${i + 1} (${cn.screens[i].type}) is labelled "${C(lang, cn.label)}" (got "${lab}")`);
+          await rules(p, ok, lang, `${L} concept screen ${i + 1}`);
+          const sc = cn.screens[i];
+          if (sc.type === "permissions") {
+            const states = await p.$$eval('[role="switch"]', (els) => els.map((e) => e.getAttribute("aria-checked")));
+            ok(states.length === sc.items.length && states.every((x) => x === "false"), `${L}: every permission is off by default (${states.join(" ")})`);
+            await p.click(`[data-concept-perm="${sc.items[0].id}"]`); await settle();
+            const after = await p.$$eval('[role="switch"]', (els) => els.map((e) => e.getAttribute("aria-checked")));
+            ok(after[0] === "true" && after.slice(1).every((x) => x === "false"), `${L}: each permission switches on its own`);
+            ok((await p.evaluate(() => document.body.textContent)).includes(C(lang, sc.note)), `${L}: the permissions screen says the data stays on the phone`);
+          }
+          if (sc.type === "overview") ok(Boolean(await p.$(".concept .pill.demo")), `${L}: the concept's weekly overview is labelled ${T(lang, "demo.label")}`);
+          if (sc.type === "banner") {
+            ok(Boolean(await p.$(".concept-banner")), `${L}: the banner shows while the week is not answered`);
+            if (sc.weekLabel) {
+              await p.click('[data-concept-answered="yes"]'); await settle();
+              ok(!(await p.$(".concept-banner")), `${L}: the banner is gone once the week is answered`);
+              await p.click('[data-concept-answered="no"]'); await settle();
+            }
+          }
+          if (sc.type === "questions") {
+            for (let q = 0; q < total; q++) { await p.click("[data-concept-answer]"); await settle(); }
+            ok((await p.evaluate(() => document.body.textContent)).includes(C(lang, sc.done)), `${L}: the four concept questions can be answered`);
+            await p.click("[data-concept-restart]"); await settle();
+          }
+        }
+        ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${L}: the concept fits the screen`);
+      }
       if (pg.frame) {
         ok(((await p.textContent(".mock-label")) ?? "").trim() === C(lang, pg.frame.label), `${L}: the mockup is labelled as one`);
-        await p.click('.mock-card a[data-track="frame"]'); await settle();
+        const label = (await p.getAttribute("a.mock-card", "aria-label")) ?? "";
+        ok(label.includes(C(lang, pg.frame.card.text)) && label.includes(C(lang, pg.frame.card.button)), `${L}: the card has an accessible label with its text and button`);
+        await p.click("a.mock-card > span:nth-child(2)"); await settle();
         const h = await p.evaluate(() => location.hash);
         ok(h === "#/welcome" || h === "#/pick" || h === "#/", `${L}: the card's button opens the app (at ${h})`);
       }
@@ -489,6 +541,90 @@ function buildText() {
   const bad = files.filter((f) => /Braun\b|Braün/.test(readFileSync(f, "utf8")));
   checks++;
   if (bad.length) fails.push(`build: "Braun" or "Braün" in ${bad.map((f) => path.relative(dist, f)).join(", ")}`);
+  if (!JSON.stringify(cfg).includes("nLPD")) {
+    const swiss = files.filter((f) => readFileSync(f, "utf8").includes("nLPD"));
+    checks++;
+    if (swiss.length) fails.push(`build: "nLPD" in ${swiss.map((f) => path.relative(dist, f)).join(", ")}`);
+  }
+}
+
+/** The first language, whatever the browser's, and the header's language buttons. */
+async function languageStart() {
+  const browser = await webkit.launch();
+  const okAll = (cond, msg) => { checks++; if (!cond) fails.push(`language: ${msg}`); };
+  for (const locale of ["en-US", "fr-BE", "nl-BE"]) {
+    const context = await browser.newContext({ ...devices["iPhone SE"], locale });
+    const p = await context.newPage();
+    await p.goto(base);
+    await p.waitForSelector("[data-welcome]");
+    const lang = await p.evaluate(() => document.documentElement.lang);
+    const want = cfg.languageFromBrowser === false || !langs.includes(locale.slice(0, 2)) ? cfg.defaultLanguage : locale.slice(0, 2);
+    okAll(lang === want, `a phone set to ${locale} opens in ${want} (got ${lang})`);
+    const buttons = await p.$$eval("[data-hlang]", (bs) => bs.map((b) => ({ l: b.dataset.hlang, on: b.getAttribute("aria-pressed") === "true", visible: b.offsetWidth > 0 })));
+    if (cfg.languageSwitch === "all") {
+      okAll(JSON.stringify(buttons.map((b) => b.l)) === JSON.stringify(langs) && buttons.every((b) => b.visible), `${locale}: the header shows every language (${buttons.map((b) => b.l).join(" ")})`);
+      okAll(buttons.filter((b) => b.on).map((b) => b.l).join() === lang, `${locale}: the header marks the active language`);
+      const other = langs.find((l) => l !== lang);
+      await p.click(`[data-hlang="${other}"]`); await p.waitForTimeout(300);
+      const after = await p.$$eval("[data-hlang]", (bs) => bs.map((b) => `${b.dataset.hlang}:${b.getAttribute("aria-pressed")}`));
+      okAll(after.length === langs.length && after.includes(`${other}:true`), `${locale}: after switching, every language is still shown and the new one is marked`);
+      okAll(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${locale}: the header fits a 320 px screen`);
+    } else {
+      okAll(!buttons.some((b) => b.l === lang), `${locale}: the header offers the other languages`);
+    }
+    await context.close();
+  }
+  await browser.close();
+}
+
+/**
+ * Inside another app's own browser (for example a student app's link): an iOS
+ * WKWebView (WebKit, no "Safari/" in the user agent, no service worker) and an
+ * Android WebView ("; wv)" in the user agent), once with storage and once with
+ * storage switched off. The check-in must work in each.
+ */
+async function inAppBrowsers() {
+  const ios = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
+  const android = "Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/AP1A.240505.005; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.0.0 Mobile Safari/537.36";
+  const noServiceWorker = () => { delete Navigator.prototype.serviceWorker; };
+  const noStorage = () => { Object.defineProperty(window, "localStorage", { get() { return null; } }); };
+  const runs = [
+    ["iOS in-app browser (WKWebView)", webkit, { ...devices["iPhone 14"], userAgent: ios }, [noServiceWorker], true],
+    ["Android in-app browser (WebView)", chromium, { ...devices["Pixel 7"], userAgent: android }, [noServiceWorker], true],
+    ["Android in-app browser without storage", chromium, { ...devices["Pixel 7"], userAgent: android }, [noServiceWorker, noStorage], false],
+  ];
+  for (const [name, type, device, scripts, keeps] of runs) {
+    const browser = await type.launch();
+    const context = await browser.newContext({ ...device });
+    for (const sc of scripts) await context.addInitScript(sc);
+    const p = await context.newPage();
+    const ok = (cond, msg) => { checks++; if (!cond) fails.push(`${name}: ${msg}`); };
+    p.on("pageerror", (e) => fails.push(`${name}: page error ${e.message}`));
+    p.on("request", (r) => { if (!r.url().startsWith(origin)) fails.push(`${name}: request to another host ${r.url()}`); });
+    const settle = () => p.waitForTimeout(slow ? 600 : 260);
+    const lang = cfg.defaultLanguage;
+    await p.goto(`${base}?lang=${lang}`);
+    ok(await until(p, () => Boolean(document.querySelector("[data-welcome]")), null, 8000), "the app starts");
+    ok(!(await p.$(".install")), "no install steps inside another app");
+    await rules(p, ok, lang, `${name} welcome`);
+    await p.click("[data-welcome]"); await settle();
+    await pickFirst(p, ok, settle);
+    await p.click('a[href="#/check/0"]'); await settle();
+    for (let i = 0; i < total; i++) { await p.click(i < 2 ? '[data-answer="yes"]' : '[data-answer="no"]'); await settle(); }
+    const lv = levelFor(eff, 2);
+    ok(await p.textContent("h1") === T(lang, `result.levels.${lv.id}.title`), `the check-in gives a result (got ${await p.textContent("h1")})`);
+    ok(await p.isVisible(".emergency"), "the result shows the emergency numbers");
+    await p.evaluate(() => { location.hash = "#/history"; }); await settle();
+    ok((await p.$$(".week-list li")).length === 7, "My weeks shows the new week");
+    await p.reload(); await settle();
+    if (keeps) {
+      await p.evaluate(() => { location.hash = "#/history"; }); await settle();
+      ok((await p.$$(".week-list li")).length === 7, "the answer is still there after reopening");
+    } else {
+      ok(Boolean(await p.$("h1")), "without storage the app still opens after reopening");
+    }
+    await browser.close();
+  }
 }
 
 async function desktop() {
@@ -532,6 +668,8 @@ const runs = [
   ...(insts.length ? [["Pixel 7, every university in each language", () => institutionFlows("Pixel 7 (each university)", chromium, devices["Pixel 7"])]] : []),
   ...(cfg.pages?.length ? [["iPhone SE, the config's pages", () => pageFlows("iPhone SE (pages)", webkit, devices["iPhone SE"])]] : []),
   ["build", buildText],
+  ["first language and the header switch", languageStart],
+  ["in-app browsers", inAppBrowsers],
   ["desktop", desktop],
   ["offline", offline],
 ];

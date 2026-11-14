@@ -108,6 +108,10 @@ test("i18n helpers", () => {
   assert.equal(pickLanguage(uni, { browser: ["fr-CH"] }), "fr");
   assert.equal(pickLanguage(uni, { browser: ["de-CH"] }), uni.defaultLanguage);
   assert.equal(pickLanguage(uni, { search: "?lang=de" }), uni.defaultLanguage);
+  const fixed = { ...uni, languageFromBrowser: false };
+  assert.equal(pickLanguage(fixed, { browser: ["fr-CH"] }), uni.defaultLanguage, "the browser is ignored when the config says so");
+  assert.equal(pickLanguage(fixed, { stored: "fr", browser: ["en-US"] }), "fr", "a language the student chose is kept");
+  assert.equal(pickLanguage(fixed, { search: "?lang=fr" }), "fr");
 });
 
 test("university selection by URL or folder, with a safe fallback", async () => {
