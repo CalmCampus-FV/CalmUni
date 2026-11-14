@@ -453,9 +453,12 @@ async function pageFlows(name, browserType, device) {
       ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${L}: page ${pg.id} fits the screen`);
       if (await p.$(".table-card")) {
         for (const width of [320, 390, 479, 480, 768]) {
-          await p.setViewportSize({ width, height: 700 }); await p.waitForTimeout(60);
-          const over = await p.$$eval(".table-card, .table-card .table-wrap", (els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).length);
-          ok(over === 0 && await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${L}: page ${pg.id}: tables fit at ${width} px without scrolling sideways`);
+          await p.setViewportSize({ width, height: 700 });
+          // Slow machines lay out a resized page a moment later: wait until it has the new width.
+          const fits = await until(p, (w) => innerWidth === w
+            && [...document.querySelectorAll(".table-card, .table-card .table-wrap")].every((e) => e.scrollWidth <= e.clientWidth + 1)
+            && document.documentElement.scrollWidth <= innerWidth, width, 3000);
+          ok(fits, `${L}: page ${pg.id}: tables fit at ${width} px without scrolling sideways`);
         }
         await p.setViewportSize(device.viewport); await p.waitForTimeout(60);
       }
