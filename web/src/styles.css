@@ -281,7 +281,8 @@ main { flex: 1; padding: 8px 20px calc(var(--dock-h) + 24px); outline: none; }
 .table-card th, .table-card td { text-align: left; vertical-align: top; padding: 8px 10px 8px 0; border-top: 1px solid var(--line); }
 .table-card thead th { border-top: 0; font-size: 13px; color: var(--ink-soft); }
 .table-card tbody th { font-weight: 600; }
-.table-card td { white-space: nowrap; }
+.table-card td { white-space: normal; overflow-wrap: anywhere; }
+.table-card th { overflow-wrap: anywhere; }
 
 /* A plainly generic phone mockup (never a copy of another app's design) */
 .mock { margin: 0; display: grid; justify-items: center; gap: 10px; }
@@ -313,13 +314,13 @@ main { flex: 1; padding: 8px 20px calc(var(--dock-h) + 24px); outline: none; }
   .table-card thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .table-card tr { padding: 10px 0; border-top: 1px solid var(--line); }
   .table-card tbody th, .table-card td { border-top: 0; padding: 2px 0; }
-  .table-card td { white-space: normal; display: flex; justify-content: space-between; gap: 12px; }
-  .table-card td::before { content: attr(data-label); color: var(--ink-soft); font-size: 13px; }
+  .table-card td { white-space: normal; padding-top: 6px; }
+  .table-card td::before { content: attr(data-label); display: block; color: var(--ink-soft); font-size: 13px; }
 }
 
 /* Concept mockup: an interactive phone for something not built */
-.concept-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
-.concept-tabs .btn { flex: 1 1 auto; padding: 0 14px; }
+.concept-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.concept-tabs .btn { width: 100%; padding: 0 10px; }
 .concept-title { font-weight: 700; font-size: 15px; }
 .concept-banner { display: grid; gap: 8px; padding: 12px; border-radius: 14px; background: var(--sand); box-shadow: 0 0 0 2px var(--sage) inset; font-size: 14px; line-height: 1.35; }
 .concept-banner .btn { justify-self: start; min-height: 40px; font-size: 14px; padding: 0 16px; }
