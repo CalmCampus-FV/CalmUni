@@ -164,8 +164,23 @@ for (const f of files) {
   const RESERVED = new Set(["", "home", "welcome", "pick", "check", "result", "preview", "results", "history", "support", "about", "privacy", "more"]);
   const pageIds = new Set();
   const checkBlock = (b, w) => {
-    const kinds = ["h", "p", "note", "list", "items", "box", "links", "table"].filter((k) => b[k] !== undefined);
-    if (kinds.length !== 1) return err(w, "a block has exactly one of h, p, note, list, items, box, links, table");
+    const kinds = ["h", "p", "note", "list", "items", "box", "links", "table", "concept"].filter((k) => b[k] !== undefined);
+    if (kinds.length !== 1) return err(w, "a block has exactly one of h, p, note, list, items, box, links, table, concept");
+    if (kinds[0] === "concept") {
+      const cn = b.concept;
+      // Something not built: every screen carries the label saying so.
+      for (const k of ["label", "app", "tabsLabel"]) needLoc(cn[k], `${w}.concept.${k}`);
+      const need = { banner: ["banner", "button"], questions: ["done", "again"], overview: ["heading", "text"], permissions: ["intro", "note"] };
+      (cn.screens ?? []).forEach((sc, j) => {
+        const sw = `${w}.concept.screens[${j}]`;
+        if (!need[sc.type]) return err(sw, `type must be one of ${Object.keys(need).join(", ")}`);
+        for (const k of ["tab", "title", ...need[sc.type]]) needLoc(sc[k], `${sw}.${k}`);
+        for (const k of ["caption", "weekLabel", "answered", "notAnswered"]) if (sc[k]) needLoc(sc[k], `${sw}.${k}`);
+        if (sc.type === "permissions") (sc.items ?? []).forEach((it, k) => { if (!it.id) err(sw, "permission items need an id"); needLoc(it.label, `${sw}.items[${k}].label`); });
+      });
+      if (!cn.screens?.length) err(w, "a concept needs screens");
+      return;
+    }
     const k = kinds[0];
     if (k === "h" || k === "p" || k === "note") needLoc(b[k], `${w}.${k}`);
     if (k === "list") for (const l of c.languages) if (!Array.isArray(b.list[l]) || !b.list[l].length) err(w, `list needs a "${l}" list`);
@@ -176,7 +191,8 @@ for (const f of files) {
       const tb = b.table;
       needLoc(tb.caption, `${w}.table.caption`);
       // Numbers in a table are never presented as results: each table says what they are.
-      if (tb.label !== "example" && tb.label !== "target") err(w, 'table.label must be "example" (made-up numbers) or "target" (proposed targets)');
+      if (!["example", "target", "info"].includes(tb.label)) err(w, 'table.label must be "example" (made-up numbers), "target" (proposed targets) or "info" (no numbers)');
+      if (tb.label === "info" && JSON.stringify(tb.rows ?? {}).match(/\d/)) err(w, 'an "info" table holds no numbers: use "example" or "target"');
       if (tb.label === "target") needLoc(tb.note, `${w}.table.note`);
       for (const l of c.languages) {
         const head = tb.head?.[l], rows = tb.rows?.[l];
@@ -204,6 +220,14 @@ for (const f of files) {
     if (x.marks !== undefined && (!Array.isArray(x.marks) || !x.marks.every((m) => typeof m === "string"))) err(w, "marks must be a list of strings");
   });
   if (c.logo?.text && typeof c.logo.text !== "string") needLoc(c.logo.text, `${where} logo.text`);
+  if (c.privacyNote) needLoc(c.privacyNote, `${where} privacyNote`);
+  if (c.privacyPrinciples) needLoc(c.privacyPrinciples, `${where} privacyPrinciples`);
+  if (c.languageSwitch !== undefined && c.languageSwitch !== "all") err(where, 'languageSwitch can only be "all"');
+  if (c.languageFromBrowser !== undefined && typeof c.languageFromBrowser !== "boolean") err(where, "languageFromBrowser must be true or false");
+  const linkNotes = [c.services, ...insts.map((i) => i.services)].flatMap((sv) => Object.entries(sv ?? {}));
+  for (const [sid, s] of linkNotes) for (const [l, v] of Object.entries(s.contact?.linkNote ?? {})) {
+    if (!c.languages.includes(l) || typeof v !== "string" || !v.trim()) err(where, `services.${sid}.contact.linkNote.${l} must be text for one of the languages`);
+  }
 
   if (c.logo?.todo) warnings.push(`${where}: logo: ${c.logo.todo}`);
 
