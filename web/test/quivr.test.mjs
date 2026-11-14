@@ -86,7 +86,7 @@ test("it says what it is: a preview for Quivr to review, and a mockup", () => {
 
 test("numbers on the pages are labelled as targets or examples, never as results", () => {
   const tables = cfg.pages.flatMap((p) => (p.blocks ?? []).filter((b) => b.table).map((b) => b.table));
-  assert.deepEqual(tables.map((t) => t.label).sort(), ["example", "target"]);
+  assert.deepEqual(tables.map((t) => t.label).sort(), ["example", "info", "target"]);
   assert.equal(tables.find((t) => t.label === "target").note.en, "Proposed target, to agree with Quivr in advance, not a result.");
 });
 
@@ -99,4 +99,63 @@ test("footer, time claim and names, in every language", () => {
   const all = [read("config/universities/quivr.json"), ...readdirSync(new URL("../src/i18n/", import.meta.url)).map((f) => read(`src/i18n/${f}`))].join("\n");
   assert.ok(!/Braun\b|Braün/.test(all), "the surname is Braùn");
   assert.ok(!/under a minute/.test(all), "the claim is \"less than a minute\"");
+});
+
+const EN_PRIVACY = "Your answers stay on your phone. The only thing that could ever leave is an optional, anonymous ‘count me in’ tap (a single number, no answers), and that is a proposal, not built yet.";
+const EN_NO_DOWNLOAD = "No download for students and no development for Quivr: Quivr adds one card or link in its app, and CalmCampus opens inside the Quivr app's own browser.";
+const page = (id) => cfg.pages.find((p) => p.id === id);
+const notes = (id) => (page(id).blocks ?? []).flatMap((b) => [b.note, ...(b.box ?? []).map((x) => x.note)]).filter(Boolean);
+
+test("always opens in Dutch, and the header shows all three languages", () => {
+  assert.equal(cfg.languageFromBrowser, false);
+  assert.equal(cfg.languageSwitch, "all");
+});
+
+test("the same privacy line on the welcome screen, the Quivr view and the measurement page", () => {
+  assert.equal(cfg.privacyNote.en, EN_PRIVACY);
+  for (const id of ["quivr-view", "quivr-measure"]) {
+    assert.ok(notes(id).some((n) => JSON.stringify(n) === JSON.stringify(cfg.privacyNote)), id);
+  }
+  const text = JSON.stringify(cfg);
+  assert.ok(!/nothing (ever )?leaves|everything stays|niets verlaat|alles blijft op|rien ne quitte|tout reste sur/i.test(text), "no absolute wording");
+});
+
+test("no Swiss nLPD for a Belgian audience", () => {
+  const all = [read("config/universities/quivr.json"), ...readdirSync(new URL("../src/i18n/", import.meta.url)).map((f) => read(`src/i18n/${f}`))].join("\n");
+  assert.ok(!all.includes("nLPD"));
+});
+
+test("VUB in French: the Dutch page, labelled, and begeleiding@vub.be", () => {
+  const vub = cfg.institutions.find((i) => i.id === "vub");
+  const ps = vub.services.psychologists.contact;
+  assert.ok(new URL(ps.link.fr).pathname.startsWith("/nl/"));
+  assert.equal(ps.linkNote.fr, "(en néerlandais)");
+  assert.equal(ps.email, "begeleiding@vub.be");
+  for (const s of Object.values(vub.services)) assert.ok(!s.contact.link.fr.includes("/en/"), "no English page for French readers");
+});
+
+test("'Other institution' reads naturally in French and English", () => {
+  const other = cfg.institutions.find((i) => i.id === "other");
+  assert.ok(other.advice.fr.startsWith("Les services aux étudiant·es de ton établissement"));
+  assert.ok(other.advice.en.startsWith("Your institution's student services"));
+  assert.ok(!/studentenvoorzieningen|Stuvo/.test(other.advice.fr + other.advice.en));
+});
+
+test("no download for students, no development for Quivr: on the Quivr view and What Quivr gets", () => {
+  assert.equal(page("quivr-view").lead.en, EN_NO_DOWNLOAD);
+  assert.ok(notes("quivr-gets").some((n) => n.en === EN_NO_DOWNLOAD));
+});
+
+test("Phase 1 and Phase 2: reachable from the Quivr view and the guide; the concept is labelled and opt-in", () => {
+  const phases = page("quivr-phases");
+  assert.ok(page("quivr-view").blocks.some((b) => b.links?.includes("quivr-phases")));
+  assert.ok(cfg.tries.some((x) => x.href === "#/quivr-phases"));
+  const concept = phases.blocks.find((b) => b.concept).concept;
+  assert.deepEqual([concept.label.nl, concept.label.en, concept.label.fr], ["Concept: niet gebouwd", "Concept: not built", "Concept : pas développé"]);
+  assert.deepEqual(concept.screens.map((x) => x.type), ["banner", "questions", "overview", "permissions"]);
+  const perms = concept.screens.find((x) => x.type === "permissions");
+  assert.deepEqual(perms.items.map((x) => x.id), ["sleep", "steps", "screen"]);
+  assert.ok(perms.items.every((x) => !("default" in x)), "nothing is switched on in the config");
+  assert.equal(perms.note.en, "All data stays on your phone and is never sent to Quivr or CalmCampus.");
+  assert.ok(phases.blocks.some((b) => b.note?.en === "Low effort for Quivr, not zero: one integration and an app release."));
 });
