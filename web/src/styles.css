@@ -281,7 +281,8 @@ main { flex: 1; padding: 8px 20px calc(var(--dock-h) + 24px); outline: none; }
 .table-card th, .table-card td { text-align: left; vertical-align: top; padding: 8px 10px 8px 0; border-top: 1px solid var(--line); }
 .table-card thead th { border-top: 0; font-size: 13px; color: var(--ink-soft); }
 .table-card tbody th { font-weight: 600; }
-.table-card td { white-space: nowrap; }
+.table-card td { white-space: normal; overflow-wrap: anywhere; }
+.table-card th { overflow-wrap: anywhere; }
 
 /* A plainly generic phone mockup (never a copy of another app's design) */
 .mock { margin: 0; display: grid; justify-items: center; gap: 10px; }
