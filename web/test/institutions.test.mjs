@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { institutionConfig, institutionsOf } from "../src/lib/config.js";
+import { institutionConfig, institutionsOf, linkLanguage } from "../src/lib/config.js";
 import { resultFor } from "../src/lib/scoring.js";
 import { createStore } from "../src/lib/store.js";
 
@@ -59,4 +59,14 @@ test("the choice is stored per config and cleared by Start over", () => {
   assert.equal(mem.get("cc:multi:uni"), "uni-a");
   store.clearAll();
   assert.equal(store.getUni(), null);
+});
+
+test("a website's language comes from linkLang, else from its address", () => {
+  const c = { link: { nl: "https://x.be/nl/a", en: "https://x.be/stuvo/english/b", fr: "https://x.be/a" }, linkLang: { fr: "nl" } };
+  assert.equal(linkLanguage(c, "nl"), "nl");
+  assert.equal(linkLanguage(c, "en"), "en");
+  assert.equal(linkLanguage(c, "fr"), "nl");
+  assert.equal(linkLanguage({ link: { en: "https://x.be/about" } }, "en"), null);
+  assert.equal(linkLanguage({ link: { en: "https://ugent.be/student/en/x.htm" } }, "en"), "en");
+  assert.equal(linkLanguage({}, "en"), null);
 });

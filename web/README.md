@@ -61,7 +61,9 @@ Phone signals never answer a question and never change the result: the level com
    - `welcomeNote` (a card on the welcome screen), `welcomeLinks` and `aboutPages` (`heading` and page `ids`): where those pages are linked from.
    - `privacyNote`: the config's own privacy line, shown instead of the welcome screen's third point and at the top of the privacy page. `privacyPrinciples`: the privacy page's closing line (the shared one cites the GDPR; EPFL's config adds the Swiss nLPD).
    - `languageFromBrowser: false`: the first visit always opens in `defaultLanguage`, whatever the browser's language. `languageSwitch: "all"`: the header shows every language, with the active one marked.
-   - `contact.linkNote` on a service: a note per language on its website button, for example `{"fr": "(en néerlandais)"}` when there is no page in that language.
+   - Website buttons say when the page is not in the reader's language, for example "Open the website (Dutch only)" or "Ouvrir le site web (en anglais)": the page's language comes from its address (a `/nl/`, `/en/`, `/fr/` or `/english/` path segment), or from `contact.linkLang` (per reading language, for example `{"nl": "nl"}`) when the address does not say. `contact.linkNote` overrides the label with your own text. The link also gets `hreflang`, and `npm run e2e` fails if a page in another language has no label.
+   - A `frame` can also be a page block, so it sits under its own heading.
+   - `share`: the link preview when the address is pasted in an email or a chat app (`og:` and Twitter tags, in `defaultLanguage`): `title`, `description`, and optionally `image` (`config/share/<name>.png`, 1200 × 630, copied as `share.png` next to that build's `index.html` and not kept offline) with `imageAlt`. Needs `publicUrl`. The page stays `noindex`.
    - `tries`: the reviewer's guide in About, instead of the five generic steps. Each step has `id`, `href`, `h`, `p` and `marks`: it is ticked once every mark was recorded. Marks: `checkin`, `results`, `support`, `feedback`, `uni` (a university picked), `frame` (the mockup's card opened), `page:<id>` (a page opened).
 10. Add `test/<id>.test.mjs` for what matters at that university (routing, sources, emergency numbers) and a `HANDOFF.md` for the state of the pilot.
 11. Run `npm run check`. It fails on a missing translation, an unknown service, signal or page, a bad email or link, an exclamation mark, an emoji, a time in seconds (the check-in "takes less than a minute"), or a clinical word such as "disorder". TODOs show up as warnings. Then `npm test`, `npm run build` and `npm run e2e`.
@@ -89,6 +91,10 @@ rsync -a --delete dist/ ../../_CalmWeb/docs/demo/
 ```
 
 Pages publishes within a minute or two; then `E2E_URL=https://cc.braunf.com/<id>/ npm run e2e` (or `/demo/` with `E2E_UNI=default`) checks the live copy. Every preview is `noindex`: search engines index the site's home page, which links to the demo. Installed apps update themselves: the service worker fetches the new files past the browser cache, and the page reloads once the new version is ready (never during a check-in). The build version is shown at the bottom of About, so a tester can tell which build a phone runs.
+
+## Accessibility
+
+`npm run e2e` runs [axe-core](https://github.com/dequelabs/axe-core) (WCAG 2.1 A and AA rules, contrast included) on every screen in every language and fails on any serious or critical finding; it also tabs through the main screens and checks that each focused element has a visible outline (2 px or more, 3:1 against what is behind it), that every link and button has a label, that `<html lang>` follows the language, and that nothing moves when the phone asks for reduced motion. Install axe-core next to Playwright: `npm i --no-save playwright axe-core`.
 
 ## Privacy design
 
