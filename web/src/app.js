@@ -597,7 +597,7 @@ function block(b) {
     const head = L(tb.head) ?? [], rows = L(tb.rows) ?? [];
     // Made-up numbers always carry the Example label ("info" tables hold no numbers).
     const tag = tb.label === "example" ? `<span class="pill demo">${esc(t("demo.label"))}</span>` : "";
-    return `<div class="card stack table-card"><div class="row wrap"><h3 class="grow">${esc(Lt(tb.caption))}</h3>${tag}</div>
+    return `<div class="card stack table-card"><div class="row wrap"><h2 class="grow h3">${esc(Lt(tb.caption))}</h2>${tag}</div>
       ${tb.note ? `<p class="small">${esc(Lt(tb.note))}</p>` : ""}
       <div class="table-wrap"><table><thead><tr>${head.map((h) => `<th scope="col">${esc(typo(h))}</th>`).join("")}</tr></thead>
       <tbody>${rows.map((r) => `<tr>${r.map((cell, i) => (i ? `<td data-label="${esc(typo(head[i] ?? ""))}">${esc(typo(cell))}</td>` : `<th scope="row">${esc(typo(cell))}</th>`)).join("")}</tr>`).join("")}</tbody></table></div></div>`;
