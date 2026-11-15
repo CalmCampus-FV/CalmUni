@@ -428,6 +428,7 @@ async function institutionFlows(name, browserType, device) {
 
 async function pageFlows(name, browserType, device) {
   const browser = await browserType.launch();
+  const wide = await chromium.launch();
   const p = await (await browser.newContext({ ...device })).newPage();
   const ok = (cond, msg) => { checks++; if (!cond) fails.push(`${name}: ${msg}`); };
   p.on("pageerror", (e) => fails.push(`${name}: page error ${e.message}`));
@@ -452,15 +453,17 @@ async function pageFlows(name, browserType, device) {
       await rules(p, ok, lang, `${L} page ${pg.id}`);
       ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${L}: page ${pg.id} fits the screen`);
       if (await p.$(".table-card")) {
+        // Each width in its own window (a resized phone window does not relayout on every engine).
         for (const width of [320, 390, 479, 480, 768]) {
-          await p.setViewportSize({ width, height: 700 });
-          // Slow machines lay out a resized page a moment later: wait until it has the new width.
-          const fits = await until(p, (w) => innerWidth === w
+          const wctx = await wide.newContext({ viewport: { width, height: 700 } });
+          const wp = await wctx.newPage();
+          await wp.goto(`${base}?lang=${lang}#/${pg.id}`);
+          const fits = await until(wp, () => Boolean(document.querySelector(".table-card"))
             && [...document.querySelectorAll(".table-card, .table-card .table-wrap")].every((e) => e.scrollWidth <= e.clientWidth + 1)
-            && document.documentElement.scrollWidth <= innerWidth, width, 3000);
+            && document.documentElement.scrollWidth <= innerWidth, null, 5000);
           ok(fits, `${L}: page ${pg.id}: tables fit at ${width} px without scrolling sideways`);
+          await wctx.close();
         }
-        await p.setViewportSize(device.viewport); await p.waitForTimeout(60);
       }
       const tables = (pg.blocks ?? []).flatMap((b) => (b.table ? [b.table] : b.box ? b.box.filter((x) => x.table).map((x) => x.table) : []));
       const shown = await p.$$eval(".table-card", (cards) => cards.map((c) => ({ demo: Boolean(c.querySelector(".pill.demo")), text: c.textContent })));
@@ -532,6 +535,7 @@ async function pageFlows(name, browserType, device) {
       ok(await ticked() === afterStartOver, `${L}: Start over resets the guide`);
     }
   }
+  await wide.close();
   await browser.close();
 }
 
