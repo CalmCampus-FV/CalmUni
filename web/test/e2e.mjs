@@ -656,10 +656,11 @@ async function axeCheck(p, ok, where) {
   if (!axeSource) { ok(false, `${where}: axe-core is not installed (npm i --no-save axe-core)`); return; }
   if (!(await p.evaluate(() => Boolean(window.axe)))) await p.evaluate(axeSource);
   const found = await p.evaluate(async (tags) => {
-    const r = await window.axe.run(document, { runOnly: { type: "tag", values: tags }, resultTypes: ["violations"] });
+    // WCAG A and AA, plus heading order (a best-practice rule that Lighthouse also checks).
+    const r = await window.axe.run(document, { runOnly: { type: "tag", values: tags }, rules: { "heading-order": { enabled: true } }, resultTypes: ["violations"] });
     return r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.slice(0, 3).map((n) => n.target.join(" ")) }));
   }, AXE_TAGS);
-  const bad = found.filter((v) => v.impact === "serious" || v.impact === "critical");
+  const bad = found.filter((v) => v.impact === "serious" || v.impact === "critical" || v.id === "heading-order");
   ok(!bad.length, `${where}: axe: ${bad.map((v) => `${v.id} (${v.impact}) at ${v.nodes.join(", ")}`).join("; ")}`);
   for (const v of found.filter((x) => !bad.includes(x))) axeMinor.set(v.id, `${v.impact}, for example ${where}`);
 }
