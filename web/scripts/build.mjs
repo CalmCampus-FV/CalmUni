@@ -24,15 +24,54 @@ const list = (dir, base = dir) =>
     return statSync(p).isDirectory() ? list(p, base) : [path.relative(base, p)];
   });
 
+const SHARE_IMAGE = "share.png";
+const attr = (s) => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
+/**
+ * The preview shown when the link is pasted in an email or a chat app (Open Graph
+ * and Twitter card tags), from the config's `share`, in its default language.
+ * The page stays noindex: these tags only shape the preview.
+ */
+function withShareTags(html, cfg, out) {
+  const s = cfg.share;
+  const locale = { nl: "nl_BE", fr: "fr_BE", en: "en_GB" };
+  const tags = [
+    `<meta property="og:type" content="website">`,
+    `<meta property="og:title" content="${attr(s.title)}">`,
+    `<meta property="og:description" content="${attr(s.description)}">`,
+    `<meta property="og:url" content="${attr(cfg.publicUrl)}">`,
+    `<meta property="og:site_name" content="CalmCampus">`,
+    `<meta property="og:locale" content="${locale[cfg.defaultLanguage] ?? cfg.defaultLanguage}">`,
+    ...cfg.languages.filter((l) => l !== cfg.defaultLanguage).map((l) => `<meta property="og:locale:alternate" content="${locale[l] ?? l}">`),
+  ];
+  if (s.image) {
+    cpSync(path.join(root, s.image), path.join(out, SHARE_IMAGE));
+    tags.push(
+      `<meta property="og:image" content="${attr(cfg.publicUrl + SHARE_IMAGE)}">`,
+      `<meta property="og:image:type" content="image/png">`,
+      `<meta property="og:image:width" content="1200">`,
+      `<meta property="og:image:height" content="630">`,
+      `<meta property="og:image:alt" content="${attr(s.imageAlt)}">`,
+    );
+  }
+  tags.push(`<meta name="twitter:card" content="${s.image ? "summary_large_image" : "summary"}">`, `<meta name="twitter:title" content="${attr(s.title)}">`, `<meta name="twitter:description" content="${attr(s.description)}">`);
+  return html
+    .replace(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${attr(s.description)}">`)
+    .replace('<meta name="robots" content="noindex">', `<meta name="robots" content="noindex">\n  ${tags.join("\n  ")}`);
+}
+
 function buildOne(id, out) {
   mkdirSync(out, { recursive: true });
   cpSync(src, out, { recursive: true });
-  cpSync(path.join(root, "config"), path.join(out, "config"), { recursive: true });
+  // Link-preview images (config/share/) are not part of the app: only this
+  // university's own one is copied, next to index.html, and it is not kept offline.
+  cpSync(path.join(root, "config"), path.join(out, "config"), { recursive: true, filter: (p) => !p.startsWith(path.join(root, "config/share")) });
 
   const cfg = JSON.parse(readFileSync(path.join(root, `config/universities/${id}.json`), "utf8"));
   let html = readFileSync(path.join(out, "index.html"), "utf8");
   html = html.replace('name="cc-university" content="default"', `name="cc-university" content="${id}"`)
     .replace('<html lang="en">', `<html lang="${cfg.defaultLanguage}">`);
+  if (cfg.share) html = withShareTags(html, cfg, out);
   writeFileSync(path.join(out, "index.html"), html);
 
   writeFileSync(path.join(out, "manifest.webmanifest"), JSON.stringify({
@@ -54,7 +93,7 @@ function buildOne(id, out) {
   }, null, 2));
 
   // Service worker: precache every file, versioned by a hash of their contents.
-  const files = list(out).filter((f) => f !== "sw.js" && f !== "_headers" && !f.endsWith(".txt"));
+  const files = list(out).filter((f) => f !== "sw.js" && f !== "_headers" && f !== SHARE_IMAGE && !f.endsWith(".txt"));
   const hash = createHash("sha256");
   for (const f of files.sort()) hash.update(f).update(readFileSync(path.join(out, f)));
   const shell = ["./", ...files.map((f) => f)];

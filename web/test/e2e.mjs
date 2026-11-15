@@ -10,16 +10,17 @@
 // Every expected text comes from that config and from src/i18n, so it works for any
 // university without changes.
 //
-// Needs Playwright, which the app itself does not use. Install it once, outside the
-// project's dependencies:  npm i --no-save playwright && npx playwright install webkit chromium
+// Needs Playwright and axe-core, which the app itself does not use. Install them once, outside the
+// project's dependencies:  npm i --no-save playwright axe-core && npx playwright install webkit chromium
 import http from "node:http";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { loc, translate, typography } from "../src/lib/i18n.js";
 import { levelFor, levelRanges } from "../src/lib/scoring.js";
 import { orderQuestions, signalsFor, weekSignals } from "../src/lib/signals.js";
-import { institutionsOf, institutionConfig } from "../src/lib/config.js";
+import { institutionsOf, institutionConfig, linkLanguage } from "../src/lib/config.js";
 
 let pw;
 try { pw = await import("playwright"); } catch {
@@ -27,6 +28,9 @@ try { pw = await import("playwright"); } catch {
   process.exit(2);
 }
 const { webkit, chromium, devices } = pw;
+// axe-core (accessibility rules), installed next to Playwright: npm i --no-save axe-core
+let axeSource = null;
+try { axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8"); } catch { axeSource = null; }
 
 /* ---------- What to test, and what it should say ---------- */
 
@@ -118,10 +122,16 @@ async function supportLinks(p, ok, conf, lang, L) {
     if (s.contact.email) ok(hrefs.includes(`mailto:${s.contact.email}`), `${L}: ${id} email link`);
     const site = loc(s.contact.link, lang, cfg.defaultLanguage);
     if (site) ok(hrefs.includes(site), `${L}: ${id} website link`);
-    const note = s.contact.linkNote?.[lang];
-    if (note && site) {
-      const label = await p.locator(`section.service[aria-labelledby="s-${id}"] a[href="${site}"]`).first().textContent();
-      ok((label ?? "").includes(typography(note, lang)), `${L}: ${id} website button says "${note}"`);
+    const pageLang = linkLanguage(s.contact, lang);
+    const note = s.contact.linkNote?.[lang] ?? (pageLang && pageLang !== lang ? ui[lang].service.pageIn?.[pageLang] : null);
+    if (site) {
+      const a = p.locator(`section.service[aria-labelledby="s-${id}"] a[href="${site}"]`).first();
+      const label = ((await a.textContent()) ?? "").trim();
+      // A page in another language than the reader's must say so on its button.
+      if (pageLang && pageLang !== lang) ok(Boolean(note) && label.includes(typography(note, lang)), `${L}: ${id} website is in ${pageLang}, so its button says so (got "${label}")`);
+      else if (note) ok(label.includes(typography(note, lang)), `${L}: ${id} website button says "${note}"`);
+      else ok(!/\([^)]*\)$/.test(label), `${L}: ${id} website is in ${lang}: no language label (got "${label}")`);
+      if (pageLang) ok(await a.getAttribute("hreflang") === pageLang, `${L}: ${id} website link has hreflang="${pageLang}"`);
     }
     if (s.contact.phone) ok(hrefs.includes(`tel:${s.contact.phone.replace(/\s/g, "")}`), `${L}: ${id} phone link`);
   }
@@ -505,10 +515,12 @@ async function pageFlows(name, browserType, device) {
         }
         ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${L}: the concept fits the screen`);
       }
-      if (pg.frame) {
-        ok(((await p.textContent(".mock-label")) ?? "").trim() === C(lang, pg.frame.label), `${L}: the mockup is labelled as one`);
+      const frame = pg.frame ?? (pg.blocks ?? []).find((b) => b.frame)?.frame;
+      if (frame) {
+        const caption = await p.$eval("a.mock-card", (a) => a.closest("figure").querySelector(".mock-label").textContent.trim());
+        ok(caption === C(lang, frame.label), `${L}: the mockup is labelled as one`);
         const label = (await p.getAttribute("a.mock-card", "aria-label")) ?? "";
-        ok(label.includes(C(lang, pg.frame.card.text)) && label.includes(C(lang, pg.frame.card.button)), `${L}: the card has an accessible label with its text and button`);
+        ok(label.includes(C(lang, frame.card.text)) && label.includes(C(lang, frame.card.button)), `${L}: the card has an accessible label with its text and button`);
         await p.click("a.mock-card > span:nth-child(2)"); await settle();
         const h = await p.evaluate(() => location.hash);
         ok(h === "#/welcome" || h === "#/pick" || h === "#/", `${L}: the card's button opens the app (at ${h})`);
@@ -634,6 +646,249 @@ async function inAppBrowsers() {
   }
 }
 
+/* ---------- Accessibility: axe on every screen, keyboard focus, language, reduced motion ---------- */
+
+const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
+const axeMinor = new Map(); // moderate and minor findings, reported but not failing
+
+/** axe-core's WCAG A and AA rules (contrast included): no serious or critical finding. */
+async function axeCheck(p, ok, where) {
+  if (!axeSource) { ok(false, `${where}: axe-core is not installed (npm i --no-save axe-core)`); return; }
+  if (!(await p.evaluate(() => Boolean(window.axe)))) await p.evaluate(axeSource);
+  const found = await p.evaluate(async (tags) => {
+    const r = await window.axe.run(document, { runOnly: { type: "tag", values: tags }, resultTypes: ["violations"] });
+    return r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.slice(0, 3).map((n) => n.target.join(" ")) }));
+  }, AXE_TAGS);
+  const bad = found.filter((v) => v.impact === "serious" || v.impact === "critical");
+  ok(!bad.length, `${where}: axe: ${bad.map((v) => `${v.id} (${v.impact}) at ${v.nodes.join(", ")}`).join("; ")}`);
+  for (const v of found.filter((x) => !bad.includes(x))) axeMinor.set(v.id, `${v.impact}, for example ${where}`);
+}
+
+/** Every link and button has a name a screen reader can say. */
+async function named(p, ok, where) {
+  const unnamed = await p.$$eval("a[href], button", (els) => els.filter((e) => e.offsetWidth > 0 || e.offsetHeight > 0)
+    .filter((e) => !(e.getAttribute("aria-label") || e.textContent).trim()).map((e) => e.outerHTML.slice(0, 80)));
+  ok(!unnamed.length, `${where}: every link and button has a label (missing: ${unnamed.join(" | ")})`);
+}
+
+/** Tab through a screen: each focused element shows an outline of at least 2 px, at 3:1 or more against what is behind it. */
+async function focusRing(p, ok, where) {
+  await p.evaluate(() => { document.activeElement?.blur?.(); document.querySelectorAll("[data-focus-seen]").forEach((e) => e.removeAttribute("data-focus-seen")); scrollTo(0, 0); });
+  let n = 0;
+  for (let i = 0; i < 90; i++) {
+    await p.keyboard.press("Tab");
+    const info = await p.evaluate(() => {
+      const el = document.activeElement;
+      if (!el || el === document.body || el.id === "view") return { skip: true };
+      if (el.hasAttribute("data-focus-seen")) return { done: true };
+      el.setAttribute("data-focus-seen", "");
+      const rgb = (c) => { const m = c.match(/[\d.]+/g); if (!m) return null; const [r, g, b, a = 1] = m.map(Number); return a < 0.5 ? null : [r, g, b]; };
+      const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+      let up = el.parentElement, bg = null;
+      while (up && !bg) { bg = rgb(getComputedStyle(up).backgroundColor); up = up.parentElement; }
+      bg ??= rgb(getComputedStyle(document.body).backgroundColor);
+      const cs = getComputedStyle(el), oc = rgb(cs.outlineColor);
+      const ratio = oc && bg ? (Math.max(lum(oc), lum(bg)) + 0.05) / (Math.min(lum(oc), lum(bg)) + 0.05) : 0;
+      return { what: el.outerHTML.slice(0, 70), style: cs.outlineStyle, width: parseFloat(cs.outlineWidth) || 0, ratio: Math.round(ratio * 10) / 10 };
+    });
+    if (info.done) break;
+    if (info.skip) continue;
+    n++;
+    ok(info.style !== "none" && info.width >= 2 && info.ratio >= 3, `${where}: keyboard focus is visible on ${info.what} (outline ${info.style} ${info.width}px, ${info.ratio}:1)`);
+  }
+  ok(n > 0, `${where}: Tab reaches the links and buttons`);
+}
+
+async function accessibility() {
+  const browser = await chromium.launch();
+  const name = "accessibility";
+  const ok = (cond, msg) => { checks++; if (!cond) fails.push(`${name}: ${msg}`); };
+  for (const lang of langs) {
+    const L = lang.toUpperCase();
+    const context = await browser.newContext({ ...devices["Pixel 7"] });
+    const p = await context.newPage();
+    p.on("pageerror", (e) => fails.push(`${name}: page error ${e.message}`));
+    const settle = () => p.waitForTimeout(slow ? 500 : 220);
+    const go = async (h) => { await p.evaluate((x) => { location.hash = x; }, h); await settle(); };
+    const screen = async (where, { focus = false } = {}) => {
+      ok(await p.evaluate(() => document.documentElement.lang) === lang, `${L} ${where}: <html lang="${lang}">`);
+      await axeCheck(p, ok, `${L} ${where}`);
+      await named(p, ok, `${L} ${where}`);
+      if (focus) await focusRing(p, ok, `${L} ${where}`);
+    };
+    await p.goto(`${base}?lang=${lang}`);
+    await p.waitForSelector("[data-welcome]");
+    ok(await p.$$eval("[data-hlang]", (bs) => bs.every((b) => b.getAttribute("lang") === b.dataset.hlang)), `${L}: each language button is marked with its own language`);
+    await screen("welcome", { focus: lang === langs[0] });
+    await p.click("[data-welcome]"); await settle();
+    if (insts.length) { await screen("university picker"); await p.click(`[data-uni="${firstInst}"]`); await settle(); }
+    await screen("home", { focus: lang === langs[0] });
+    await p.click('a[href="#/check/0"]'); await settle();
+    await screen("question");
+    for (let i = 0; i < total; i++) { await p.click(i < 2 ? '[data-answer="yes"]' : '[data-answer="no"]'); await settle(); }
+    await screen("result", { focus: lang === langs[0] });
+    for (const h of ["#/results", ...eff.levels.map((lv) => `#/preview/${lv.id}`), "#/history", "#/support", "#/about", "#/privacy"]) {
+      await go(h);
+      await screen(h.slice(2), { focus: lang === langs[0] && (h === "#/about" || h === "#/support") });
+    }
+    for (const pg of cfg.pages ?? []) {
+      await go(`#/${pg.id}`);
+      await screen(`page ${pg.id}`, { focus: lang === langs[0] });
+      for (const cn of (pg.blocks ?? []).filter((b) => b.concept).map((b) => b.concept)) {
+        for (let i = 0; i < cn.screens.length; i++) {
+          await p.click(`[data-concept-step="${i}"]`); await settle();
+          if (cn.screens[i].type === "permissions") { await p.click("[data-concept-perm]"); await settle(); }
+          await screen(`page ${pg.id}, concept screen ${i + 1}`);
+        }
+      }
+    }
+    if (lang === langs[0]) {
+      for (const inst of insts) {
+        await go("#/pick"); await p.click(`[data-uni="${inst.id}"]`); await settle();
+        await go("#/support");
+        await screen(`support for ${inst.id}`);
+      }
+    }
+    await context.close();
+  }
+
+  // Reduced motion: with the phone set to it, nothing on any screen moves.
+  for (const reducedMotion of ["reduce", "no-preference"]) {
+    const context = await browser.newContext({ ...devices["Pixel 7"], reducedMotion });
+    const p = await context.newPage();
+    await p.goto(`${base}?lang=${cfg.defaultLanguage}`);
+    await p.waitForSelector("[data-welcome]");
+    const moving = () => p.evaluate(() => [...document.querySelectorAll("*")].filter((e) => {
+      const cs = getComputedStyle(e);
+      return [cs.transitionDuration, cs.animationDuration].some((d) => d.split(",").some((x) => parseFloat(x) > 0));
+    }).map((e) => e.className || e.tagName));
+    const pages = [null, ...(cfg.pages ?? []).map((pg) => pg.id)];
+    let any = [];
+    for (const pid of pages) {
+      if (pid) { await p.evaluate((x) => { location.hash = x; }, `#/${pid}`); await p.waitForTimeout(200); }
+      const cn = (cfg.pages ?? []).find((pg) => pg.id === pid)?.blocks?.find((b) => b.concept)?.concept;
+      const perm = cn ? cn.screens.findIndex((s) => s.type === "permissions") : -1;
+      if (perm > -1) { await p.click(`[data-concept-step="${perm}"]`); await p.waitForTimeout(200); }
+      const m = await moving();
+      any = any.concat(m);
+      if (reducedMotion === "reduce") ok(!m.length, `reduced motion: nothing moves on ${pid ?? "the welcome screen"} (${[...new Set(m)].join(", ")})`);
+    }
+    if (reducedMotion === "no-preference" && (cfg.pages ?? []).some((pg) => pg.frame || pg.blocks?.some((b) => b.frame || b.concept))) {
+      ok(any.length > 0, "without reduced motion, the small transitions are there (so the check above means something)");
+    }
+    await context.close();
+  }
+  await browser.close();
+}
+
+/* ---------- Saved answers across languages, a reload mid-check-in, and a new week ---------- */
+
+async function edgeCases() {
+  const browser = await chromium.launch();
+  const context = await browser.newContext({ ...devices["Pixel 7"] });
+  const p = await context.newPage();
+  const name = "edge cases";
+  const ok = (cond, msg) => { checks++; if (!cond) fails.push(`${name}: ${msg}`); };
+  p.on("pageerror", (e) => fails.push(`${name}: page error ${e.message}`));
+  const settle = () => p.waitForTimeout(slow ? 600 : 260);
+  const go = async (h) => { await p.evaluate((x) => { location.hash = x; }, h); await settle(); };
+  const h1 = () => p.textContent("h1");
+  const hash = () => p.evaluate(() => location.hash);
+  const weeks = () => p.$$eval(".week-list li", (x) => x.length);
+  const [first, ...others] = langs;
+  // A Wednesday, then the Wednesday after it.
+  const day1 = new Date(2026, 10, 18, 10, 0, 0);
+  const day8 = new Date(2026, 10, 25, 10, 0, 0);
+  await p.clock.setFixedTime(day1);
+  await p.goto(`${base}?lang=${first}`);
+  await p.waitForSelector("[data-welcome]");
+  await p.click("[data-welcome]"); await settle();
+  await pickFirst(p, ok, settle);
+  const support = levelFor(eff, 2);
+
+  // A check-in in one language is kept, and read, in every other language.
+  await p.click('a[href="#/check/0"]'); await settle();
+  for (let i = 0; i < total; i++) { await p.click(i < 2 ? '[data-answer="yes"]' : '[data-answer="no"]'); await settle(); }
+  ok(await h1() === T(first, `result.levels.${support.id}.title`), `${first}: the check-in gives "${support.id}"`);
+  for (const l of others) {
+    await p.click(`[data-hlang="${l}"]`); await settle();
+    ok(await h1() === T(l, `result.levels.${support.id}.title`), `the result saved in ${first} reads in ${l} (got ${await h1()})`);
+    await go("#/history");
+    ok(await weeks() === 7, `${l}: My weeks still has the week checked in ${first} (${await weeks()} weeks)`);
+    await go("#/");
+    ok(Boolean(await p.$(`a[href^="#/result/"]`)), `${l}: Home still shows this week as done`);
+  }
+  await p.click(`[data-hlang="${first}"]`); await settle();
+
+  // Switching language in the middle of a check-in keeps the answers given so far.
+  if (others.length) {
+    await go("#/"); await p.click('a[href="#/check/0"]'); await settle();
+    await p.click('[data-answer="yes"]'); await settle();
+    await p.click(`[data-hlang="${others[0]}"]`); await settle();
+    ok(await hash() === "#/check/1", `switching language mid-check-in stays on question 2 (at ${await hash()})`);
+    ok((await p.textContent("body")).includes(T(others[0], "checkin.progress", { n: 2, total })), "the progress reads in the new language");
+    for (let i = 1; i < total; i++) { await p.click(i < 2 ? '[data-answer="yes"]' : '[data-answer="no"]'); await settle(); }
+    ok(await h1() === T(others[0], `result.levels.${support.id}.title`), `the answer given before switching language still counts (got ${await h1()})`);
+    await p.click(`[data-hlang="${first}"]`); await settle();
+  }
+
+  // A reload mid-check-in starts the check-in again cleanly, and saves one week.
+  await go("#/"); await p.click('a[href="#/check/0"]'); await settle();
+  await p.click('[data-answer="yes"]'); await settle();
+  await p.click('[data-answer="yes"]'); await settle();
+  ok(await hash() === "#/check/2", "on question 3 before the reload");
+  await p.reload(); await settle(); await settle();
+  ok(await hash() === "#/check/0", `after a reload the check-in starts again at question 1 (at ${await hash()})`);
+  ok((await p.textContent("body")).includes(T(first, "checkin.progress", { n: 1, total })), "the progress says question 1");
+  ok(!(await p.$(".answers .picked")), "no answer is shown as picked after the reload");
+  for (let i = 0; i < total; i++) { await p.click('[data-answer="no"]'); await settle(); }
+  ok(await h1() === T(first, "result.levels.steady.title"), `the restarted check-in only counts the new answers (got ${await h1()})`);
+  await go("#/history");
+  ok(await weeks() === 7 && !(await p.$(".week-now")), `one own week, still (${await weeks()} weeks), and no "not done yet" line`);
+
+  // A week later: nothing answered yet, and My weeks says so.
+  await p.clock.setFixedTime(day8);
+  await p.reload(); await settle();
+  await go("#/");
+  ok(!(await p.$(`a[href^="#/result/"]`)) && (await p.textContent("body")).includes(T(first, "home.start")), "a new week starts with the check-in, not last week's result");
+  await go("#/history");
+  const now = await p.$(".week-now");
+  ok(Boolean(now) && ((await now?.textContent()) ?? "").includes(T(first, "history.notYet")), "My weeks shows the new week as not done yet");
+  ok(await weeks() === 7, `last week's check-in is still listed (${await weeks()} weeks)`);
+  const labels = await p.$$eval(".week-now strong, .week-list strong", (x) => x.map((e) => e.textContent));
+  ok(labels.length > 1 && labels[0] !== labels[1], `the new week and last week have different dates (${labels.slice(0, 2).join(" / ")})`);
+  ok((await p.$$(".chart .col")).length <= 7, "the chart still fits seven weeks");
+  await rules(p, ok, first, "new week");
+  await p.click(".week-now"); await settle();
+  for (let i = 0; i < total; i++) { await p.click('[data-answer="no"]'); await settle(); }
+  await go("#/history");
+  ok(await weeks() === 8 && !(await p.$(".week-now")), `after the new week's check-in: two own weeks (${await weeks()} weeks)`);
+  await browser.close();
+}
+
+/* ---------- The link preview for email and chat apps ---------- */
+
+async function shareTags() {
+  const ok = (cond, msg) => { checks++; if (!cond) fails.push(`link preview: ${msg}`); };
+  const html = await (await fetch(base, { cache: "no-store" })).text();
+  const unescape = (s) => s?.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&amp;/g, "&");
+  const meta = (key) => unescape(html.match(new RegExp(`<meta (?:property|name)="${key}" content="([^"]*)"`))?.[1]);
+  ok(meta("robots") === "noindex", "the page stays noindex");
+  if (!cfg.share) { ok(!html.includes("og:title"), "no link preview tags without share in the config"); return; }
+  ok(meta("og:title") === cfg.share.title, `og:title is "${cfg.share.title}" (got "${meta("og:title")}")`);
+  ok(meta("og:description") === cfg.share.description && meta("description") === cfg.share.description, "og:description and description give the share text");
+  ok(meta("og:url") === cfg.publicUrl, "og:url is the public address");
+  ok(html.includes(`<html lang="${cfg.defaultLanguage}"`), `the page opens in ${cfg.defaultLanguage}`);
+  if (cfg.share.image) {
+    ok(meta("og:image") === `${cfg.publicUrl}share.png` && meta("twitter:card") === "summary_large_image", "og:image is a full address, with a large card");
+    const res = await fetch(new URL("share.png", base));
+    const buf = Buffer.from(await res.arrayBuffer());
+    ok(res.ok && buf.subarray(1, 4).toString() === "PNG", "the preview image is served as a PNG");
+    ok(buf.length > 24 && buf.readUInt32BE(16) === 1200 && buf.readUInt32BE(20) === 630, `the preview image is 1200 × 630 (got ${buf.readUInt32BE(16)} × ${buf.readUInt32BE(20)})`);
+    ok(buf.length < 300 * 1024, `the preview image is small (${Math.round(buf.length / 1024)} KB)`);
+  }
+}
+
 async function desktop() {
   const browser = await chromium.launch();
   const p = await browser.newPage({ viewport: { width: 1280, height: 800 } });
@@ -677,16 +932,21 @@ const runs = [
   ["build", buildText],
   ["first language and the header switch", languageStart],
   ["in-app browsers", inAppBrowsers],
+  ["accessibility (axe, keyboard focus, language, reduced motion)", accessibility],
+  ["saved answers, reloads and a new week", edgeCases],
+  ["link preview", shareTags],
   ["desktop", desktop],
   ["offline", offline],
 ];
 try {
-  for (const [name, run] of runs) {
+  // E2E_ONLY=<part of a name> runs only the matching parts (while working on one).
+  for (const [name, run] of runs.filter(([n]) => !process.env.E2E_ONLY || n.includes(process.env.E2E_ONLY))) {
     try { await run(); } catch (e) { fails.push(`${name}: stopped: ${String(e.message ?? e).split("\n")[0]}`); }
   }
 } finally {
   if (!live) server.close();
 }
 console.log(`${checks} checks`);
+if (axeMinor.size) console.log(`axe, moderate or minor (not failing): ${[...axeMinor].map(([id, w]) => `${id} (${w})`).join("; ")}`);
 if (fails.length) { fails.forEach(annotate); console.error(fails.join("\n")); process.exit(1); }
 console.log("all pass");
