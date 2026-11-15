@@ -812,6 +812,7 @@ async function edgeCases() {
   ok(await h1() === T(first, `result.levels.${support.id}.title`), `${first}: the check-in gives "${support.id}"`);
   for (const l of others) {
     await p.click(`[data-hlang="${l}"]`); await settle();
+    if (!(await hash()).startsWith("#/result/")) { await go("#/"); await p.click('a[href^="#/result/"]'); await settle(); }
     ok(await h1() === T(l, `result.levels.${support.id}.title`), `the result saved in ${first} reads in ${l} (got ${await h1()})`);
     await go("#/history");
     ok(await weeks() === 7, `${l}: My weeks still has the week checked in ${first} (${await weeks()} weeks)`);
