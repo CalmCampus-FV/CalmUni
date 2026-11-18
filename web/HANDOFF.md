@@ -1,73 +1,83 @@
-# Handoff: Quivr reviewer preview (web/)
+# Handoff: UNIL showcase (web/unil/)
 
-> **For the next Claude session.** Self-contained. Read it, then `web/README.md` and the repo `CLAUDE.md`. Do not email or contact anyone.
+> **For the next Claude session.** Self-contained. Read it, then the repo `CLAUDE.md`. Do not email or contact anyone.
 
-Written 2026-11-14, updated 2026-11-15 after the final polish pass. Made by Florian Braùn and Hélène David.
+Written 2026-11-18. Made by Florian Braùn and Hélène David.
 
 ## What this is, and what it is not
 
-A reviewer preview of CalmCampus made for Quivr (the Flemish student app by Student Innovations vzw) to look at. It is **not a Quivr feature, there is no pilot, and Quivr has not agreed to anything**. The app says so on the welcome screen and on the Quivr view ("Mockup: how this could look in Quivr, not a live Quivr feature"). Never claim a pilot, results, users, awards or a partnership in the app, in docs or in commits.
+A one-page demo for the Université de Lausanne (UNIL): the Service d'orientation et carrières, its psychologists and student services. It shows how CalmCampus could look as a **small, discreet part of the official "UNIL Campus" app** instead of a separate app. It is **a mockup**. It is not the UNIL Campus app, there is no pilot, and UNIL has not agreed to anything. The page says so in a bar at the top: "Maquette : à quoi CalmCampus pourrait ressembler dans UNIL Campus. Ce n'est pas l'app officielle." Never claim a pilot, users, results, partnerships or awards. No UNIL logo is used.
 
-Live at `https://cc.braunf.com/quivr/` (noindex, not linked from the site's home page).
+- **Live:** https://cc.braunf.com/unil/ (noindex, nofollow; not linked from the site's home page, not in the sitemap)
+- **Code:** branch `unil-web-demo` in `lumenworksco/-CalmCampus`, made from `quivr-web-demo`. The deployed build is commit `95e777b`. This file was added in the next commit.
+- **Deploy:** `_CalmWeb` commit `019f43e` ("unil preview: first version (CalmCampus 95e777b)"). Only `docs/unil/` was added. Quivr, EPFL and the general demo were not touched or redeployed.
 
-**Branches.** This branch (`quivr-web-demo`) is `main` plus what is Quivr-specific: `config/universities/quivr.json`, `config/qr/quivr.svg`, `test/quivr.test.mjs` and this file. App changes go on `main` (through a feature branch) and are merged from `main` into this branch, never the other way. No "Co-Authored-By" trailer in commits. The repo is public: no names of people at Quivr or at universities, and nothing they told us in confidence beyond what the app already says.
+## Why it is not a config like Quivr or EPFL
 
-## How it works
+The other branches are the student PWA, configured per university. UNIL asked for something else: a page for **staff**, with a phone mockup of *their* app around CalmCampus. So this branch adds a small self-contained static page in `web/unil/` with its own build step (`scripts/build-unil.mjs`). The shared app code, `scripts/build.mjs` and the configs are unchanged. **This breaks the "university branches only add a config" rule** on purpose. If the showcase format is reused for another university, move it to `main` as a generic "host app mockup" and make it config-driven.
 
-- Quivr's students come from several universities, so the config has `institutions`: KU Leuven, KU Leuven Kulak (Kortrijk), UGent, UAntwerpen, VUB, UHasselt, and "Other institution". After Start, the student picks one ("Which university are you at?", stored as `cc:quivr:uni`, changeable in About, asked again after Start over). Each has its own services, routing and campus number; "Other" shows only the national lines and general advice.
-- Languages: Dutch, English, French. The first visit always opens in Dutch, whatever the phone's language (`languageFromBrowser: false`); the header always shows NL, EN and FR with the active one marked (`languageSwitch: "all"`). A language the student picks is kept. Same four questions and ids as the EPFL preview (sleep, planning, energy, connection), each skippable. Levels: 0 steady (support list), 1 notice, 2 support, 3+ care.
-- Quivr view (`#quivr-view`), written for a partnership manager to take in in about 30 seconds, five numbered parts in this order: 1. what students see (no download, no development; the generic phone frame labelled Mockup with one CalmCampus card, "Weekly check-in: 4 questions, less than a minute. Private, stays on your phone." / Open; the privacy line); 2. what Quivr gets; 3. the three-week test and its proposed targets; 4. Phase 2 as a concept, not built; 5. "Next step: a 20-minute call", with florian@calm.braunf.com and helene@calm.braunf.com as plain text (no form, no link, no tracking). A unit test keeps it under 220 English words. Whether Quivr has a card slot or push notifications stays a question (below), not a claim.
-- For Quivr pages (from About and the Quivr view): What Quivr gets; How we avoid last year's low engagement; Three-week test (every number labelled "Proposed target, to agree with Quivr in advance, not a result"); How we'd measure, privacy-first (design only, nothing built; the example table is labelled Example).
-- Guide (About > Things to try), about five minutes: open the Quivr view and tap the card (the whole card is tappable); pick a university; do the check-in; see every possible result; open Support and the emergency numbers; see Phase 1 and Phase 2; read the test plan. Send feedback stays in About (contact@calm.braunf.com, subject "Feedback on the CalmCampus preview (Quivr)", per language).
-- Footer on every screen: "We are students, not medical professionals. CalmCampus does not diagnose or treat; ..." (NL and FR translated). The check-in "takes less than a minute"; `npm run check` refuses any time in seconds.
-- Privacy: no backend, no analytics, CSP `connect-src 'self'`. The welcome screen, the privacy page, the Quivr view and the measurement page all give the same line (`privacyNote`): "Your answers stay on your phone. The only thing that could ever leave is an optional, anonymous 'count me in' tap (a single number, no answers), and that is a proposal, not built yet." The privacy page cites the GDPR only (no Swiss nLPD for this audience).
-- No download, no development for Quivr: the card opens CalmCampus in the Quivr app's own browser (stated on the Quivr view and What Quivr gets). In an in-app browser (iOS WKWebView, Android WebView) the home-screen steps are hidden, the app runs without a service worker, and falls back to memory if storage is off; `npm run e2e` checks the check-in in both. Whether answers are kept from week to week depends on how Quivr's app opens links (ask Quivr).
-- Phase 1 → Phase 2 (`#/quivr-phases`, from the Quivr view, About and the guide): Phase 1 is now (card or link, optional weekly push or banner with Quivr's own tools, the three-week test). Phase 2 is an interactive concept labelled "Concept: not built" on every screen: a weekly banner on Quivr's home that comes back only in an unanswered week, the four questions, the weekly overview (example data), and opt-in permissions for sleep, steps and screen time, each off by default. Who does what: CalmCampus builds and maintains the module; Quivr integrates it, ships the update and approves the wording: "low effort for Quivr, not zero: one integration and an app release."
-- Website buttons say when the page is in another language than the reader's ("(Dutch only)", "(in het Engels)", "(en anglais)", "(en néerlandais)"), from the page address or `linkLang` (KU Leuven's Dutch page). `npm run e2e` fails if a page in another language has no label; a unit test checks every link in every language has a known page language.
-- Example data is explained once, on the welcome screen: "Example data: not from real students."
-- Link preview (email, Slack): og:title "CalmCampus × Quivr: preview", a Dutch description and a 1200 × 630 image (`config/share/quivr.png`, text only, no Quivr logo); still noindex.
-- Accessibility: `npm run e2e` runs axe-core (WCAG 2.1 A and AA, contrast included) on every screen in all three languages, with zero serious or critical findings; keyboard focus is visible everywhere (cream outline on the dark emergency card); every link and button has a label; `<html lang>` follows the language; nothing moves with reduced motion.
-- Edge cases (tested): answers saved in one language are kept and read in the others, also when the language is switched mid-check-in; a reload mid-check-in restarts the check-in cleanly at question 1 (answers in progress are only kept in memory) and still saves one week; a new week without a check-in shows on My weeks as "This week: no check-in yet".
-- Copy: informal je / tu / you everywhere; French uses "bilan" for the check-in (as in the app's strings) and the same inclusive forms (étudiant·es, ami·es; the connection question's version went to 2 for that); Belgian national phone format (09 331 00 31, 02 629 23 06).
-- No Quivr logo: the header says "voor Quivr-studenten" / "for Quivr students" in text. A logo needs Quivr's permission (`logo.todo`).
+Files on this branch, beyond the Quivr branch:
 
-## Routing and sources (verified 2026-11-14 on each university's own pages)
+- `web/unil/index.html`, `styles.css`, `app.js`: the page and the interactive mockup (vanilla JS, no dependencies).
+- `web/unil/logic.js`: the cases and the message rule, with no DOM, unit-tested.
+- `web/test/unil.test.mjs`: logic and wording rules (French only, no "détecte/diagnostic/burn-out", no AI, no claims, no GDPR, no emoji or exclamation marks, the disclaimer, contact, footer, and links only to www.unil.ch/unil/fr).
+- `web/test/unil-e2e.mjs`: Playwright run of every case on iPhone SE (320 px), iPhone 14, Pixel 7 and desktop, in WebKit and Chromium. It checks axe (WCAG 2.1 A/AA + best practice, zero serious or critical), horizontal overflow, keyboard paths (Enter opens, Escape closes, Space toggles, visible focus on each tab stop), the expected text per case, link attributes, and that no request goes to another origin. With `SHOTS=<dir>` it saves screenshots.
+- `web/scripts/make-unil-share.mjs` → `web/config/share/unil.png`: the 1200 × 630 link preview (text plus a generic phone, no logo).
+- `npm run build:unil` (tests + build), `npm run dev:unil`, `npm run e2e:unil`.
 
-| University | 1-2 yes | 3-4 yes | Campus number |
-|---|---|---|---|
-| KU Leuven | Eerstelijnspsycholoog (Stuvo), 016 32 43 43 | Psycholoog-psychotherapeut (Stuvo), same line | Noodlijn KU Leuven 016 32 22 22 |
-| Kulak | Studentenwelzijn en gezondheid (Stuvo Kulak), 056 24 61 38 | same | Noodlijn KU Leuven 016 32 22 22 |
-| UGent | Studentenpsychologen, Studentencentrum studentencentrum@ugent.be, 09 331 00 31 | same | Permanentie UGent 09 264 88 88 |
-| UAntwerpen | Studentenpsychologen (STIP), stip@uantwerpen.be, 03 265 48 72 | same (PSY-NET is listed; STIP refers to it) | none published |
-| VUB | Studentenpsychologen, begeleiding@vub.be, 02 629 23 06 | same (BRUCC is listed) | Security Etterbeek 02 629 11 11 |
-| UHasselt | Studentenpsycholoog, studentenpsycholoog@uhasselt.be | same (Student Point is listed) | Fire or accident 011 26 88 88 |
-| Other | general advice, national lines | same | none |
+The Quivr files (`config/universities/quivr.json`, its QR and share image, `test/quivr.test.mjs`) are still on this branch, inherited and unused here.
 
-National lines (each verified on the operator's own site): 112 (112.be), Zelfmoordlijn 1813, Tele-Onthaal 106, Télé-Accueil 107, Centre de Prévention du Suicide 0800 32 123. Every source URL is in the config (`source`, `sources`), with what is missing in `todo` or `notPublished`.
+## What is simulated and what is real
 
-## Still to do
+| Real | Simulated (made up for the demo) |
+|---|---|
+| UNIL service names, descriptions, phones, e-mails and page links (verified below) | The UNIL Campus home screen (placeholder rows, no real data, rows are not interactive) |
+| The four questions and their wording | Previous weeks for each case (A, B, D: two ordinary weeks; C: two harder weeks) |
+| The message rule (`logic.js`), the same for every case | Sleep data ("Selon votre téléphone, sommeil …"), labelled **Exemple** |
+| Nothing is stored or sent: state lives in memory, gone on reload; CSP `connect-src 'none'`; no analytics | The phone-data switches (they change no real permission) |
 
-1. UAntwerpen STIP: the email (stip@uantwerpen.be) is hidden behind a button on the STIP page itself, but printed in plain text on UAntwerpen's own Faculty of Arts page "SOS Mental wellbeing" (`emailSource` in the config, checked 2026-11-15). STIP hours change per period (`todo`).
-2. VUB: begeleiding@vub.be is used in every language. VUB's Dutch and English organisation contact pages list it; only the English "contact a student psychologist" page says guidance@vub.be. VUB has no French pages (vub.be/fr redirects to Dutch), so French readers get the Dutch page, labelled "(en néerlandais)" (for BRUCC too). Ask VUB which address to show. Other universities' French readers get the English page, labelled "(en anglais)"; Kulak has only a Dutch page ("(Dutch only)", "(en néerlandais)"), UHasselt's Student Point only an English one ("(in het Engels)").
-3. Not dropped but worth a second look: the Community Help Service English line (its own site prints two different numbers, so it is not in the app).
-4. Review choices to ask Quivr and the universities: KU Leuven 3-4 yes to the psychologist-psychotherapist (KU Leuven's page: first-line for mild to moderate, psychotherapist for difficulties that disrupt daily life); every other university routes all levels to its first stop. "KU Leuven" means the Leuven Stuvo services; students on other KU Leuven campuses may have their own.
-5. Quivr questions: does Quivr have a card or banner slot, push notifications, or only the news section? Does its app open links in its own browser (WKWebView / WebView) or hand them to Safari or Chrome, and does that browser keep storage from week to week (that decides whether My weeks keeps past answers)? Which institutions should the picker list (Quivr's site also names university colleges)? Which test window fits before the exam period? Who approves the card text? Is a 20-minute call the right next step, and who joins it?
-6. florian@calm.braunf.com and helene@calm.braunf.com are shown on the Quivr view: make sure both addresses receive mail before sending the link.
-7. Re-verify the services if this goes out more than a week after 2026-11-14.
+**Rule:** a week counts as "harder" when the mean of the answered scale questions (1–5) is 2.5 or less. Skipped questions don't count, and the free text is never read. Calm week → thank-you only. One harder week → "Une semaine difficile, ça arrive." with a light link to the services. This week and the two before all harder → a calm suggestion with the services listed. **Phone data never changes the result** (as in the rest of CalmCampus); sleep only adds context. Case D (data declined) works on the four answers alone. The threshold and the three-week rule are a proposal for UNIL's psychologists to change. They are not a clinical cut-off.
 
-## Not verified
+Cases (control "Simuler un étudiant" next to the phone; `?cas=B` opens a case directly; "Voir directement l'écran final" skips the questions):
 
-- No test on a real iPhone or Android phone, nor inside the real Quivr app: in-app browsers are simulated in Playwright (plus one real WKWebView run on a Mac).
-- The link preview is checked by its tags and image; it was not pasted into a real email client or Slack (that would mean sending it).
-- Lighthouse scores are from one run each against the live URL on a laptop, with Lighthouse's simulated mobile throttling; real phones on real networks vary.
+- **A. Une semaine normale:** thank-you only, no nudge.
+- **B. Une semaine difficile:** "Une semaine difficile, ça arrive." plus a light link to the services, no push to consult.
+- **C. Plusieurs semaines difficiles:** a calm suggestion and the services listed with contact details, plus one small line with emergency numbers.
+- **D. Refuse l'accès aux données:** sleep switch off; "Sans données du téléphone : vos quatre réponses suffisent."
+
+## UNIL services: verified on unil.ch on 2026-11-18
+
+All pages are in French (links carry `hreflang="fr"`, a visible "FR" tag, and "s'ouvre dans un nouvel onglet" for screen readers).
+
+| Service | Page | Contact used (as printed on the page) |
+|---|---|---|
+| Accueil Santé | https://www.unil.ch/unil/fr/home/menuinst/campus/aides-et-soutiens/sante.html | +41 21 692 25 77, accueilsante@unil.ch (Anthropole 1056) |
+| Consultation psychothérapeutique (Département de psychiatrie du CHUV, for UNIL students) | https://www.unil.ch/unil/fr/home/menuinst/campus/aides-et-soutiens/sante/sante-mentale.html | consult.psy-unil@chuv.ch (appointments by e-mail; 1 to 4 sessions; first one free) |
+| Consultations sociales: "Accompagnement social - écoute et orientation" (SASME) | https://www.unil.ch/unil/fr/home/menuinst/campus/aides-et-soutiens/soutien-social.html | +41 21 692 60 30 and affaires.sociales@unil.ch (from the "Aides et soutiens" hub page: https://www.unil.ch/unil/fr/home/menuinst/campus/aides-et-soutiens.html) |
+| Aides financières et dispenses de l'Unil (SASME) | https://www.unil.ch/unil/fr/home/menuinst/campus/aides-et-soutiens/aides-financieres-et-administratives/aides-financieres-unil.html | affaires.sociales@unil.ch |
+| Service d'orientation et carrières (SOC) | https://www.unil.ch/unil/fr/home/menuinst/universite/organisation-universite/unites-et-services/service-orientation-et-carrieres.html | +41 21 692 21 30, orientation@unil.ch |
+| Urgences UNIL | https://www.unil.ch/unil/fr/home/urgences.html | Campus emergency 24 h/24: 021 692 20 00 (115 from an internal phone); ambulance 144; CTMG (médecin de garde, Vaud) 0848 133 133 |
+
+## Not verified / open
+
+1. **The UNIL Campus look.** It is based on the 2020 App Store screenshots: a white list of line icons with labels, a gear at top left, a blue "UNIL Campus" title in small caps, and a grey info card at the top, which is where the CalmCampus card sits. The current version (14.x) may look different. The Play Store page returned 404. **Ask UNIL for a current screenshot**, or check on a phone. The blue (#006AAE) is chosen for contrast; it is not UNIL's official colour.
+2. **Old SASME and SOC sites** (`www.unil.ch/sasme/…`, `www.unil.ch/soc/…`) now redirect to `www2.unil.ch` and return 404. The links above are the current pages under `/unil/fr/`.
+3. **Not on unil.ch, so not in the app:** La Main Tendue (143), and the "021 692 21 21" number that some older materials mention. The UNIL emergency page lists 021 692 20 00. The emergency page also mentions psychiatric emergencies (canton de Vaud) with a link to the CHUV. That is left out because the number to show was not clear; ask UNIL whether to add it.
+4. **SOC phone hours** (search results say 13:00–15:00) and SASME hours (Monday, Thursday and Friday 10:00–13:00 by phone, per the hub page) are not shown in the app. Show them if UNIL wants.
+5. **Questions for UNIL:** Does UNIL Campus (PocketCampus) have a slot for a weekly card, and can a module read HealthKit / Health Connect sleep data? Who approves the wording (SOC psychologists)? Is the rule above (2.5 mean, three weeks) acceptable, or does the team prefer another one? Should the card point to the SOC first for study-related difficulties?
+6. **Lighthouse (mobile, live URL, one run, 2026-11-18):** Performance 98, Accessibility 100, Best practices 100. SEO 63, **only** because the page is `noindex` by design (`is-crawlable`).
+7. The link preview was checked by its tags and image only, not pasted into a real mail client or chat.
+8. Not tested on a real iPhone or Android phone, only in Playwright WebKit and Chromium.
+9. Make sure florian@calm.braunf.com receives mail before sending the link.
+10. Re-verify the services if the link goes out more than a week after 2026-11-18.
 
 ## Commands
 
 ```bash
 cd web
-npm run check && npm test && npm run build
-npm i --no-save playwright@1.48.2 axe-core@4.10.2 && npx playwright install webkit chromium   # once
-npm run e2e                                          # local (Quivr: every language, every university, pages, guide)
-E2E_URL=https://cc.braunf.com/quivr/ npm run e2e     # live
-rsync -a --delete dist/quivr/ ../../_CalmWeb/docs/quivr/   # deploy, then check-site.py, commit, push _CalmWeb
+npm run build:unil                                   # unit tests + build dist/unil/
+npm i --no-save playwright@1.48.2 axe-core@4.10.2    # once
+npm run e2e:unil                                     # local
+E2E_URL=https://cc.braunf.com/unil/ npm run e2e:unil # live
+rsync -a --delete dist/unil/ ../../_CalmWeb/docs/unil/   # deploy, then check-site.py, commit, push _CalmWeb
 ```
