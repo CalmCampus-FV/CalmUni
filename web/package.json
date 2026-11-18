@@ -9,6 +9,9 @@
     "test": "node --test test/*.test.mjs",
     "build": "node scripts/check.mjs && node scripts/build.mjs",
     "dev": "node scripts/build.mjs && python3 -m http.server 8080 --directory dist",
-    "e2e": "node test/e2e.mjs"
+    "e2e": "node test/e2e.mjs",
+    "build:unil": "node --test test/unil.test.mjs && node scripts/build-unil.mjs",
+    "dev:unil": "node scripts/build-unil.mjs && python3 -m http.server 8080 --directory dist",
+    "e2e:unil": "node test/unil-e2e.mjs"
   }
 }
