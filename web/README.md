@@ -74,7 +74,7 @@ Checklist before sending to a university: every `todo` is resolved or accepted, 
 
 ## Deploying to cc.braunf.com
 
-The site is GitHub Pages from `docs/` in the [`_CalmWeb`](https://github.com/lumenworksco/_CalmWeb) repo. From the university's branch, copy only its folder, never all of `dist/` (that would overwrite the site root):
+The site is GitHub Pages from `docs/` in the [`_CalmWeb`](https://github.com/CalmCampus-FV/CalmWeb) repo. From the university's branch, copy only its folder, never all of `dist/` (that would overwrite the site root):
 
 ```bash
 cd web && npm run build
