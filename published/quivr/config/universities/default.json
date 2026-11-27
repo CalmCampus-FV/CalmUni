@@ -1,0 +1,148 @@
+{
+  "id": "default",
+  "name": "Your university",
+  "nameInText": {
+    "en": "your university"
+  },
+  "logo": {
+    "text": null,
+    "image": null,
+    "todo": "Optional. Set text or image to show the university next to CalmCampus."
+  },
+  "preview": true,
+  "defaultLanguage": "en",
+  "languages": [
+    "en"
+  ],
+  "publicUrl": "https://cc.braunf.com/demo/",
+  "qr": "config/qr/default.svg",
+  "feedback": {
+    "email": "contact@calm.braunf.com",
+    "subject": {
+      "en": "Feedback on the CalmCampus preview"
+    }
+  },
+  "questions": [
+    {
+      "id": "sleep",
+      "version": 1,
+      "signals": [
+        "sleep",
+        "lateScreen"
+      ],
+      "text": {
+        "en": "This week, has your sleep been worse than usual?"
+      }
+    },
+    {
+      "id": "planning",
+      "version": 1,
+      "signals": [],
+      "text": {
+        "en": "Have you struggled to plan or organise your studies?"
+      }
+    },
+    {
+      "id": "energy",
+      "version": 1,
+      "signals": [
+        "steps"
+      ],
+      "text": {
+        "en": "Have you found it hard to get started on things you usually manage?"
+      }
+    },
+    {
+      "id": "connection",
+      "version": 1,
+      "signals": [],
+      "text": {
+        "en": "Have you been avoiding friends, classes or plans more than usual?"
+      }
+    }
+  ],
+  "levels": [
+    {
+      "id": "steady",
+      "minYes": 0,
+      "service": null
+    },
+    {
+      "id": "notice",
+      "minYes": 1,
+      "service": "counselling"
+    },
+    {
+      "id": "support",
+      "minYes": 2,
+      "service": "counselling"
+    },
+    {
+      "id": "care",
+      "minYes": 3,
+      "service": "clinical"
+    }
+  ],
+  "services": {
+    "counselling": {
+      "name": {
+        "en": "Student counselling service"
+      },
+      "purpose": {
+        "en": "Support with stress, planning and study organisation."
+      },
+      "contact": {
+        "link": null,
+        "email": null,
+        "phone": null,
+        "hours": null
+      },
+      "source": null,
+      "verified": null,
+      "todo": [
+        "name",
+        "link",
+        "email",
+        "phone",
+        "hours"
+      ]
+    },
+    "clinical": {
+      "name": {
+        "en": "Clinical care service"
+      },
+      "purpose": {
+        "en": "Clinical care from a doctor or psychologist."
+      },
+      "contact": {
+        "link": null,
+        "email": null,
+        "phone": null,
+        "hours": null
+      },
+      "source": null,
+      "verified": null,
+      "todo": [
+        "name",
+        "link",
+        "email",
+        "phone",
+        "hours"
+      ]
+    }
+  },
+  "emergency": [
+    {
+      "id": "general",
+      "number": "112",
+      "tel": "112",
+      "label": {
+        "en": "Emergency services"
+      },
+      "detail": {
+        "en": "Europe-wide emergency number. Each university's version adds its campus and local numbers."
+      },
+      "source": null
+    }
+  ]
+}

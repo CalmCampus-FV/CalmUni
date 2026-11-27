@@ -35,7 +35,7 @@ Node 20+. No `npm install` is needed to build or run. Playwright is only needed 
 
 Opened inside another app's own browser (an iOS WKWebView or an Android WebView, for example from a student app's link), the app hides the home-screen steps, works without a service worker, and falls back to memory if storage is switched off. `npm run e2e` checks the check-in in both.
 
-Phone signals never answer a question and never change the result: the level comes from the student's answers alone. They only decide which question comes first and what context is shown. A browser cannot read Apple Health, Screen Time or Health Connect, so the web preview uses examples; the native iOS app in `../ios/` reads sleep and steps for real.
+Phone signals never answer a question and never change the result: the level comes from the student's answers alone. They only decide which question comes first and what context is shown. A browser cannot read Apple Health, Screen Time or Health Connect, so the web preview uses examples; the native iOS app ([CalmApp](https://github.com/CalmCampus-FV/CalmApp)) is where real phone data belongs.
 
 ## Choosing a university
 
@@ -61,7 +61,9 @@ Phone signals never answer a question and never change the result: the level com
    - `welcomeNote` (a card on the welcome screen), `welcomeLinks` and `aboutPages` (`heading` and page `ids`): where those pages are linked from.
    - `privacyNote`: the config's own privacy line, shown instead of the welcome screen's third point and at the top of the privacy page. `privacyPrinciples`: the privacy page's closing line (the shared one cites the GDPR; EPFL's config adds the Swiss nLPD).
    - `languageFromBrowser: false`: the first visit always opens in `defaultLanguage`, whatever the browser's language. `languageSwitch: "all"`: the header shows every language, with the active one marked.
-   - `contact.linkNote` on a service: a note per language on its website button, for example `{"fr": "(en néerlandais)"}` when there is no page in that language.
+   - Website buttons say when the page is not in the reader's language, for example "Open the website (Dutch only)" or "Ouvrir le site web (en anglais)": the page's language comes from its address (a `/nl/`, `/en/`, `/fr/` or `/english/` path segment), or from `contact.linkLang` (per reading language, for example `{"nl": "nl"}`) when the address does not say. `contact.linkNote` overrides the label with your own text. The link also gets `hreflang`, and `npm run e2e` fails if a page in another language has no label.
+   - A `frame` can also be a page block, so it sits under its own heading.
+   - `share`: the link preview when the address is pasted in an email or a chat app (`og:` and Twitter tags, in `defaultLanguage`): `title`, `description`, and optionally `image` (`config/share/<name>.png`, 1200 × 630, copied as `share.png` next to that build's `index.html` and not kept offline) with `imageAlt`. Needs `publicUrl`. The page stays `noindex`.
    - `tries`: the reviewer's guide in About, instead of the five generic steps. Each step has `id`, `href`, `h`, `p` and `marks`: it is ticked once every mark was recorded. Marks: `checkin`, `results`, `support`, `feedback`, `uni` (a university picked), `frame` (the mockup's card opened), `page:<id>` (a page opened).
 10. Add `test/<id>.test.mjs` for what matters at that university (routing, sources, emergency numbers) and a `HANDOFF.md` for the state of the pilot.
 11. Run `npm run check`. It fails on a missing translation, an unknown service, signal or page, a bad email or link, an exclamation mark, an emoji, a time in seconds (the check-in "takes less than a minute"), or a clinical word such as "disorder". TODOs show up as warnings. Then `npm test`, `npm run build` and `npm run e2e`.
@@ -72,23 +74,24 @@ Checklist before sending to a university: every `todo` is resolved or accepted, 
 
 ## Deploying to cc.braunf.com
 
-The site is GitHub Pages from `docs/` in the [`_CalmWeb`](https://github.com/lumenworksco/_CalmWeb) repo. From the university's branch, copy only its folder, never all of `dist/` (that would overwrite the site root):
+The site is GitHub Pages from `docs/` in the [CalmWeb](https://github.com/CalmCampus-FV/CalmWeb) repo. This repo (CalmUni) is the source: the files that go live are kept in `published/<id>/` at the root of this repo, and CalmWeb copies them into its `docs/<id>/`. From the university's branch, copy only its folder, never all of `dist/` (that would mix every university into one folder):
 
 ```bash
-cd web && npm run build
-rsync -a --delete dist/<id>/ ../../_CalmWeb/docs/<id>/
-cd ../../_CalmWeb && python3 scripts/check-site.py
-git add docs/<id> && git commit -m "<id> preview: <what changed>" && git push origin main
+cd web && npm run build                       # on the university's branch
+# then, on a branch made from main:
+rsync -a --delete web/dist/<id>/ published/<id>/
+python3 scripts/check-published.py            # open a PR, CI green, squash-merge
+# then in a CalmWeb checkout:
+bash scripts/sync-demos.sh                    # copies published/<demo>/ from CalmUni main into docs/<demo>/
 ```
 
-The general preview (the `default` config, linked from the site's home page) is deployed the same way, from `main` only (there `dist/` holds nothing but the general preview), into `docs/demo/`:
-
-```bash
-cd web && npm run build
-rsync -a --delete dist/ ../../_CalmWeb/docs/demo/
-```
+The general preview (the `default` config, linked from the site's home page) is published the same way, from `main` only, into `published/demo/` (copy `web/dist/` without the university folders).
 
 Pages publishes within a minute or two; then `E2E_URL=https://cc.braunf.com/<id>/ npm run e2e` (or `/demo/` with `E2E_UNI=default`) checks the live copy. Every preview is `noindex`: search engines index the site's home page, which links to the demo. Installed apps update themselves: the service worker fetches the new files past the browser cache, and the page reloads once the new version is ready (never during a check-in). The build version is shown at the bottom of About, so a tester can tell which build a phone runs.
+
+## Accessibility
+
+`npm run e2e` runs [axe-core](https://github.com/dequelabs/axe-core) (WCAG 2.1 A and AA rules, contrast included) on every screen in every language and fails on any serious or critical finding; it also tabs through the main screens and checks that each focused element has a visible outline (2 px or more, 3:1 against what is behind it), that every link and button has a label, that `<html lang>` follows the language, and that nothing moves when the phone asks for reduced motion. Install axe-core next to Playwright: `npm i --no-save playwright axe-core`.
 
 ## Privacy design
 

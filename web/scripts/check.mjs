@@ -163,9 +163,14 @@ for (const f of files) {
   // Extra pages (#/<id>), the guide's own steps, and the welcome extras.
   const RESERVED = new Set(["", "home", "welcome", "pick", "check", "result", "preview", "results", "history", "support", "about", "privacy", "more"]);
   const pageIds = new Set();
+  const checkFrame = (f, w) => {
+    for (const k of ["label", "app"]) needLoc(f?.[k], `${w}.${k}`);
+    needLoc(f?.card?.text, `${w}.card.text`); needLoc(f?.card?.button, `${w}.card.button`);
+  };
   const checkBlock = (b, w) => {
-    const kinds = ["h", "p", "note", "list", "items", "box", "links", "table", "concept"].filter((k) => b[k] !== undefined);
-    if (kinds.length !== 1) return err(w, "a block has exactly one of h, p, note, list, items, box, links, table, concept");
+    const kinds = ["h", "p", "note", "list", "items", "box", "links", "table", "concept", "frame"].filter((k) => b[k] !== undefined);
+    if (kinds.length !== 1) return err(w, "a block has exactly one of h, p, note, list, items, box, links, table, concept, frame");
+    if (kinds[0] === "frame") return checkFrame(b.frame, `${w}.frame`);
     if (kinds[0] === "concept") {
       const cn = b.concept;
       // Something not built: every screen carries the label saying so.
@@ -206,8 +211,7 @@ for (const f of files) {
     pageIds.add(pg.id);
     needLoc(pg.title, `${w}.title`);
     for (const k of ["eyebrow", "lead", "linkLabel"]) if (pg[k]) needLoc(pg[k], `${w}.${k}`);
-    if (pg.frame) for (const k of ["label", "app"]) needLoc(pg.frame[k], `${w}.frame.${k}`);
-    if (pg.frame) { needLoc(pg.frame.card?.text, `${w}.frame.card.text`); needLoc(pg.frame.card?.button, `${w}.frame.card.button`); }
+    if (pg.frame) checkFrame(pg.frame, `${w}.frame`);
     (pg.blocks ?? []).forEach((b, j) => checkBlock(b, `${w}.blocks[${j}]`));
   });
   for (const pid of [...(c.welcomeLinks ?? []), ...(c.aboutPages?.ids ?? [])]) if (!pageIds.has(pid)) err(where, `unknown page "${pid}" in welcomeLinks or aboutPages`);
@@ -227,6 +231,19 @@ for (const f of files) {
   const linkNotes = [c.services, ...insts.map((i) => i.services)].flatMap((sv) => Object.entries(sv ?? {}));
   for (const [sid, s] of linkNotes) for (const [l, v] of Object.entries(s.contact?.linkNote ?? {})) {
     if (!c.languages.includes(l) || typeof v !== "string" || !v.trim()) err(where, `services.${sid}.contact.linkNote.${l} must be text for one of the languages`);
+  }
+  // linkLang: the language a website is in, per reading language, when its address does not say.
+  for (const [sid, s] of linkNotes) for (const [l, v] of Object.entries(s.contact?.linkLang ?? {})) {
+    if (!c.languages.includes(l) || !/^[a-z]{2}$/.test(v)) err(where, `services.${sid}.contact.linkLang.${l} must be a two-letter language code for one of the languages`);
+  }
+  // share: the link preview in email and chat apps (og: tags), in the default language.
+  if (c.share) {
+    if (typeof c.share.title !== "string" || !c.share.title.trim()) err(where, "share.title must be text");
+    if (typeof c.share.description !== "string" || !c.share.description.trim()) err(where, "share.description must be text");
+    if (c.share.image && !/^config\/share\/[a-z0-9-]+\.png$/.test(c.share.image)) err(where, "share.image must be config/share/<name>.png");
+    if (c.share.image && !existsSync(path.join(root, c.share.image))) err(where, `share.image ${c.share.image} is missing`);
+    if (!c.publicUrl) err(where, "share needs publicUrl (link previews need full addresses)");
+    if (c.share.image && typeof c.share.imageAlt !== "string") err(where, "share.imageAlt must describe the image");
   }
 
   if (c.logo?.todo) warnings.push(`${where}: logo: ${c.logo.todo}`);
