@@ -62,6 +62,6 @@ test("services link to unil.ch pages, in a new tab, with their language", () => 
   assert.equal(urls.length, 5);
   assert.match(js, /const U = "https:\/\/www\.unil\.ch\/unil\/fr\/home\/"/);
   assert.match(js, /target="_blank" rel="noopener noreferrer" hreflang="fr"/);
-  assert.ok(!/https?:\/\/(?!www\.unil\.ch|cc\.braunf\.com)[a-z]/.test(text), "no other site is linked or loaded");
+  assert.ok(!/https?:\/\/(?!www\.unil\.ch|uni\.calmcampus\.app)[a-z]/.test(text), "no other site is linked or loaded");
   assert.ok(!/fetch\(|XMLHttpRequest|localStorage|sendBeacon/.test(js), "no network, no storage");
 });
