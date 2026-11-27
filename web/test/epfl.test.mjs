@@ -30,7 +30,7 @@ test("EPFL details: sourced services, emergency numbers, phone link and QR code"
   }
   assert.deepEqual(epfl.emergency.map((e) => e.tel), ["+41216933000", "0848133133", "144", "143"]);
   assert.ok(epfl.emergency.every((e) => e.source));
-  assert.equal(epfl.publicUrl, "https://cc.braunf.com/epfl/");
+  assert.equal(epfl.publicUrl, "https://uni.calmcampus.app/epfl/");
   assert.ok(existsSync(new URL(`../${epfl.qr}`, import.meta.url)));
   assert.deepEqual(epfl.nameInText, { fr: "l'EPFL", en: "EPFL" });
 });

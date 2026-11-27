@@ -45,7 +45,7 @@ Team: Florian Braùn and Hélène David. We are students, not medical profession
 
 ## Still to do
 
-1. ~~Deploy.~~ **Done.** Live at `https://cc.braunf.com/epfl/` (copied from `web/dist/epfl/` to `docs/epfl/` in `_CalmWeb`). To update: `npm run build`, `rsync -a --delete dist/epfl/ ../../_CalmWeb/docs/epfl/`, run `python3 scripts/check-site.py` there, commit, push. Then `E2E_URL=https://cc.braunf.com/epfl/ npm run e2e` checks the live copy.
+1. ~~Deploy.~~ **Done.** Live at `https://uni.calmcampus.app/epfl/` (copied from `web/dist/epfl/` to `docs/epfl/` in `_CalmWeb`). To update: `npm run build`, `rsync -a --delete dist/epfl/ ../../_CalmWeb/docs/epfl/`, run `python3 scripts/check-site.py` there, commit, push. Then `E2E_URL=https://uni.calmcampus.app/epfl/ npm run e2e` checks the live copy.
 2. ~~Fill the TODOs in `epfl.json`.~~ **Done.** Neither service publishes a phone number or opening hours (both are reached by email; the CHUV says students book directly); recorded as `notPublished`. The Student Services desk number (021 693 43 45) is deliberately not used. Still open: the logo (text placeholder until EPFL gives permission). Worth asking the Consultation sociale whether they want a phone number or hours shown.
 3. **EPFL review of product choices.** Not reviewed by EPFL yet. Checked against EPFL's and CHUV's own pages and kept as they are:
    - Routing: 1-2 yes to Consultation sociale, 3-4 yes to the CHUV psychotherapeutic consultation. The CHUV page is for students whose study difficulties or low mood "put them in crisis" and lets them book directly; Consultation sociale presents itself as the first stop and refers on. Still the most sensitive choice; one line per level in `levels`.
@@ -60,7 +60,7 @@ Team: Florian Braùn and Hélène David. We are students, not medical profession
 
 ## What to test (paste into the email)
 
-1. Open https://cc.braunf.com/epfl/ on your phone, in Safari (iPhone) or Chrome (Android). On a computer, the page shows a QR code to scan with the phone.
+1. Open https://uni.calmcampus.app/epfl/ on your phone, in Safari (iPhone) or Chrome (Android). On a computer, the page shows a QR code to scan with the phone.
 2. Follow the first screen to add it to your home screen, then open it only from its icon.
 3. Tap "Start the preview", then follow "What to try" at the top of the screen. It ticks off each step and takes about five minutes.
 4. Do the weekly check-in: four yes or no questions, each one can be skipped. The example phone data (sleep, steps, late phone use) decides which question comes first.
