@@ -33,7 +33,7 @@
     "en": "Your answers stay on your phone. The only thing that could ever leave is an optional, anonymous ‘count me in’ tap (a single number, no answers), and that is a proposal, not built yet.",
     "fr": "Tes réponses restent sur ton téléphone. La seule chose qui pourrait un jour en sortir est un appui facultatif et anonyme sur « je participe » (un seul nombre, aucune réponse), et c'est une proposition, pas encore développée."
   },
-  "publicUrl": "https://cc.braunf.com/quivr/",
+  "publicUrl": "https://uni.calmcampus.app/quivr/",
   "qr": "config/qr/quivr.svg",
   "feedback": {
     "email": "contact@calm.braunf.com",
