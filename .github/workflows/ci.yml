@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  # Every branch: main and each university's branch (<id>-web-demo) are checked.
+  push:
+  pull_request:
+
+jobs:
+  published:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Published demo copies are complete and load nothing from third parties
+        run: python3 scripts/check-published.py
+
+  web:
+    # Pinned: the Playwright version below supports Ubuntu 24.04, not the Ubuntu 26
+    # that ubuntu-latest moves to from October 2026.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Configs and strings, unit tests, build
+        working-directory: web
+        run: npm run check && npm test && npm run build
+      - name: End-to-end in WebKit and Chromium
+        working-directory: web
+        run: |
+          npm i --no-save playwright@1.48.2 axe-core@4.10.2
+          npx playwright install --with-deps webkit chromium
+          npm run e2e

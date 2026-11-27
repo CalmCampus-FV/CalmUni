@@ -1,0 +1,1130 @@
+import { icon } from "./lib/icons.js";
+import { loadConfig, resolveUniversityId, institutionsOf, institutionConfig, linkLanguage } from "./lib/config.js";
+import { loc, pickLanguage, translate, typography } from "./lib/i18n.js";
+import { resultFor, answersForLevel, levelRanges } from "./lib/scoring.js";
+import { createStore } from "./lib/store.js";
+import { demoEntries } from "./lib/demo.js";
+import { isoDate, weekKey, weekStart } from "./lib/week.js";
+import { SCENARIO_IDS, DEFAULT_SCENARIO, weekSignals, signalsFor, orderQuestions } from "./lib/signals.js";
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+const app = { base: null, config: null, store: null, pickReturn: null, pageBack: null, lang: "en", ui: {}, answers: {}, confirmDelete: false, deleted: false, fellBack: false, screen: null, tabScroll: {}, advancing: false };
+/**
+ * Quivr build (`dashboard: true` in the config): the page is a mockup of the Quivr app.
+ * It opens on Quivr's Dashboard; a banner under the header pushes CalmCampus screens
+ * into the same frame (Quivr's yellow header and tab bar stay), in Quivr's own styling.
+ * #/ is the Dashboard; there is no CalmCampus home, tab bar or website chrome.
+ */
+const isQuivr = () => app.base?.dashboard === true;
+const HOME = () => "#/";
+const TABS = new Set(["home", "history", "support", "about"]);
+
+/** Display text goes through typography(); links never do (L keeps them raw). */
+const typo = (s) => typography(s, app.lang);
+const L = (value) => loc(value, app.lang, app.config.defaultLanguage);
+const Lt = (value) => typo(L(value));
+/** The university's name inside a sentence, with its article where needed (config `nameInText`). */
+const uniName = () => L(app.config?.nameInText) ?? L(app.config?.name);
+const t = (key, vars) => typo(translate(app.ui, key, { name: uniName(), ...vars }));
+
+/**
+ * Preview builds (a reviewer demo, `preview: true` in the university config) always
+ * show the example weeks and example phone data, so a reviewer never has to find a
+ * setting. Their own answers are saved next to the examples and kept apart from
+ * them (examples carry `demo: true` and are labelled Example).
+ */
+const isPreview = () => app.config?.preview === true;
+const showsExamples = () => app.store.isDemo();
+
+/**
+ * A config with `institutions` (students from several universities) asks once which
+ * one the student is at; `app.config` is then that institution's merged config and
+ * `app.base` the config as loaded.
+ */
+const hasInstitutions = () => institutionsOf(app.base).length > 0;
+const noUni = () => hasInstitutions() && !institutionsOf(app.base).some((i) => i.id === app.store.getUni());
+// The Quivr build never gates the student flow on a university: it is asked on the Hulp screen only.
+const needsPick = () => !isQuivr() && noUni();
+const scroller = () => (isQuivr() ? $("qv-scroll") : null);
+const getY = () => scroller()?.scrollTop ?? window.scrollY;
+const setY = (y) => { const sc = scroller(); if (sc) sc.scrollTop = y; else window.scrollTo(0, y); };
+function applyUni() { app.config = institutionConfig(app.base, app.store.getUni()); }
+
+/** Extra pages from the config (`pages`), reached at #/<id> (or #<id>). */
+const pageOf = (id) => (Array.isArray(app.base?.pages) ? app.base.pages : []).find((pg) => pg.id === id);
+
+/** Folder of the app files: "" at /quivr/, "../" on the static English entry at /quivr/en/. */
+const ROOT = document.querySelector('meta[name="cc-root"]')?.content || "";
+
+async function loadUi(lang) {
+  const res = await fetch(`${ROOT}i18n/${lang}.json`);
+  if (!res.ok) throw new Error(`i18n ${lang}`);
+  return res.json();
+}
+
+const isInstalled = () => window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
+function platform() {
+  const ua = navigator.userAgent;
+  // iPadOS Safari presents itself as a Mac; touch support gives it away.
+  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return "ios";
+  return /Android/.test(ua) ? "android" : "desktop";
+}
+/**
+ * Opened inside another app's own browser (an iOS WKWebView has no "Safari/" in its
+ * user agent; an Android WebView has "; wv)"). There is nothing to install there:
+ * the student opens CalmCampus from that app again next week.
+ */
+function inAppBrowser() {
+  const ua = navigator.userAgent;
+  return /; wv\)/.test(ua) || (platform() === "ios" && !/Safari\//.test(ua));
+}
+
+/* ---------- Shell ---------- */
+
+function renderShell() {
+  if (isQuivr()) { renderFrame(); return; }
+  const c = app.config;
+  const chip = c.logo?.image
+    ? `<span class="uni-chip"><img src="${esc(c.logo.image)}" alt="${esc(L(c.name))}"></span>`
+    : c.logo?.text ? `<span class="uni-chip${Lt(c.logo.text).length > 10 ? " long" : ""}">${esc(Lt(c.logo.text))}</span>` : "";
+  // The language switch stays in the header: one button per other language
+  // (with two languages, a single button with the languages icon, as before).
+  // With `languageSwitch: "all"` in the config, every language is shown and the active one is marked.
+  const all = c.languageSwitch === "all";
+  const shown = all ? c.languages : c.languages.filter((l) => l !== app.lang);
+  const langBtn = (l) => {
+    const on = l === app.lang;
+    return `<button class="lang${on ? " on" : ""}" data-hlang="${l}" lang="${l}" aria-label="${esc(app.ui.lang.names?.[l] ?? l)}"${all ? ` aria-pressed="${on}"` : ""}>${!all && shown.length === 1 ? icon("languages", 18) : ""}${esc(l.toUpperCase())}</button>`;
+  };
+  const switcher = c.languages.length > 1 ? `<div class="langs" role="group" aria-label="${esc(t("more.languageHeading"))}">${shown.map(langBtn).join("")}</div>` : "";
+  // A longer co-brand ("for … students") sits as a small line under the name, so the
+  // header fits the smallest phones next to the language buttons.
+  $("top").innerHTML = `<div class="brand${chip.includes(" long") ? " stacked" : ""}"><a class="wordmark" href="#/">CalmCampus</a>${chip}</div>${switcher}`;
+  $("disclaimer").textContent = t("disclaimer");
+  document.documentElement.lang = app.lang;
+
+  if (isPreview()) {
+    // Hidden on the welcome screen and during the check-in, where the screen needs the room.
+    $("demo-banner").innerHTML = app.screen === "welcome" || app.screen === "check" ? ""
+      : `<a class="preview-strip" href="#/about">${icon("info", 18)}<span class="grow">${esc(t("preview.strip"))}</span><span class="go">${esc(t("preview.tryLink"))}</span></a>`;
+  } else {
+    $("demo-banner").innerHTML = showsExamples()
+      ? `<div class="demo-banner" role="status">${icon("flask-conical", 18)}<span><strong>${esc(t("demo.label"))}.</strong> ${esc(t("demo.banner"))}</span><button id="demo-exit">${esc(t("demo.exit"))}</button></div>`
+      : "";
+    $("demo-exit")?.addEventListener("click", () => {
+      app.store.setDemo(false);
+      renderShell();
+      if (location.hash && location.hash !== "#/") location.hash = "#/"; else route();
+    });
+  }
+}
+
+function renderNav(active) {
+  if (isQuivr()) return;
+  if (!active) { $("nav").innerHTML = ""; return; }
+  const items = [["home", "house", HOME()], ["history", "chart-no-axes-column", "#/history"], ["support", "life-buoy", "#/support"], ["about", "info", "#/about"]];
+  $("nav").setAttribute("aria-label", t("nav.label"));
+  $("nav").innerHTML = items
+    .map(([id, ic, href]) => `<a href="${href}" ${id === active ? 'aria-current="page"' : ""}>${icon(ic, 22)}<span>${esc(t(`nav.${id}`))}</span></a>`)
+    .join("");
+}
+
+function syncDock() {
+  if (isQuivr()) return;
+  const h = $("dock").offsetHeight;
+  document.documentElement.style.setProperty("--dock-h", `${h}px`);
+}
+
+/** Keeps the share and description tags in the reader's language (crawlers use the static /en/ page). */
+function syncShareMeta() {
+  const sh = app.base?.share;
+  if (!sh) return;
+  const set = (sel, v) => { const el = document.head.querySelector(sel); if (el && v) el.setAttribute("content", v); };
+  const d = loc(sh.description, app.lang, app.base.defaultLanguage), a = loc(sh.imageAlt, app.lang, app.base.defaultLanguage);
+  set('meta[name="description"]', d); set('meta[property="og:description"]', d); set('meta[name="twitter:description"]', d);
+  set('meta[property="og:image:alt"]', a);
+  set('meta[property="og:locale"]', app.lang === "en" ? "en_GB" : "nl_BE");
+  set('meta[property="og:locale:alternate"]', app.lang === "en" ? "nl_BE" : "en_GB");
+}
+
+async function setLang(lang, fromEl = null, focusSel = null) {
+  app.lang = lang;
+  app.store.setLang(lang);
+  app.ui = await loadUi(lang);
+  syncShareMeta();
+  refresh(fromEl, isQuivr() && !focusSel ? `${deskMq()?.matches ? ".qv-panel" : ".qv-note"} [data-hlang="${lang}"]` : focusSel, renderShell);
+}
+
+/* ---------- Small pieces ---------- */
+
+const currentWeek = () => weekKey(new Date());
+
+function pillFor(level) {
+  return `<span class="pill ${esc(level.id)}">${esc(t(`result.levels.${level.id}.pill`))}</span>`;
+}
+
+function exampleTag() {
+  return showsExamples() ? `<span class="pill demo">${esc(t("demo.label"))}</span>` : "";
+}
+
+/** `replace`: go back without adding a browser history entry (used inside the check-in). */
+function backLink(href, label, replace = false) {
+  return `<a class="btn ghost sm backlink" href="${href}"${replace ? " data-replace" : ""}>${icon("arrow-left", 18)}${esc(label)}</a>`;
+}
+
+function feedbackHref() {
+  const fb = app.config.feedback;
+  const subject = typeof fb.subject === "string" ? fb.subject : L(fb.subject);
+  // A few neutral prompts help a reviewer start; nothing from the app is added.
+  const body = t("more.feedbackTemplate").replace(/\n/g, "\r\n");
+  return `mailto:${fb.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function langButtons(keep) {
+  const c = app.config;
+  if (c.languages.length < 2) return "";
+  return `<div class="seg" data-keep="${keep}" role="group" aria-label="${esc(t("more.languageHeading"))}">${c.languages.map((l) =>
+    `<button class="btn ${l === app.lang ? "sage" : "ghost"} sm" data-lang="${l}" lang="${l}" aria-pressed="${l === app.lang}">${esc(app.ui.lang.names?.[l] ?? l.toUpperCase())}</button>`).join("")}</div>`;
+}
+
+/**
+ * How to get the app onto the home screen: numbered steps on a phone, and on a
+ * computer (where the email is often opened first) a QR code to the phone link.
+ */
+function installTip() {
+  if (isInstalled() || inAppBrowser()) return "";
+  const p = platform();
+  if (p === "desktop") {
+    const url = app.config.publicUrl;
+    if (!url) return "";
+    const shown = url.replace(/^https:\/\//, "").replace(/\/$/, "");
+    const qr = app.config.qr ? `<img class="qr" src="${esc(ROOT + app.config.qr)}" width="132" height="132" alt="${esc(t("install.qrAlt", { url: shown }))}">` : "";
+    return `<div class="card install desktop">${qr}<div class="grow"><h2 class="h3">${esc(t("install.desktopTitle"))}</h2><p>${esc(t("install.desktopBody", { url: shown }))}</p></div></div>`;
+  }
+  const steps = app.ui.install[p].map((s) => `<li>${esc(typo(s))}</li>`).join("");
+  return `<div class="card stack install"><h2 class="row h3">${icon("share", 20)}${esc(t("install.title"))}</h2><ol class="steps">${steps}</ol></div>`;
+}
+
+/* ---------- The reviewer's guide ("Things to try") ---------- */
+
+// The generic guide: one entry per item of `about.try` in the strings, in the same order.
+// A config can replace it with its own `tries` ({ id, href, marks, h, p }): a step is
+// ticked once every one of its `marks` was recorded (see markTried in the code).
+const GENERIC_TRIES = [
+  { id: "checkin", href: "#/check/0", marks: ["checkin"] },
+  { id: "week", href: "#/", marks: null }, // check-ins with two different example weeks
+  { id: "results", href: "#/results", marks: ["results"] },
+  { id: "support", href: "#/support", marks: ["support"] },
+  { id: "feedback", href: "feedback", marks: ["feedback"] },
+];
+const withName = (s) => s.replace(/\{name\}/g, uniName());
+
+function tries() {
+  const own = app.base.tries;
+  if (Array.isArray(own) && own.length) {
+    return own.map((x) => ({ id: x.id, href: x.href, marks: x.marks ?? [x.id], h: withName(Lt(x.h)), p: withName(Lt(x.p)) }));
+  }
+  return GENERIC_TRIES.map((x, i) => ({ ...x, h: typo(app.ui.about.try[i].h), p: typo(withName(app.ui.about.try[i].p)) }));
+}
+
+function triedDone(list = tries()) {
+  const tried = app.store.tried();
+  const done = (x) => (x.marks === null ? tried.filter((m) => m.startsWith("scenario:")).length >= 2 : x.marks.every((m) => tried.includes(m)));
+  return new Set(list.filter(done).map((x) => x.id));
+}
+
+function tryLink(x, inner, cls = "") {
+  const href = x.href === "feedback" ? feedbackHref() : x.href;
+  const attrs = x.href === "#/check/0" ? " data-reset" : x.href === "feedback" ? ' data-track="feedback"' : "";
+  return `<a${cls ? ` class="${cls}"` : ""} href="${esc(href)}"${attrs}>${inner}</a>`;
+}
+
+/** On a result: point to the next thing to try, so a reviewer never wonders what to do next. */
+function nextTryCard() {
+  if (!isPreview()) return "";
+  const list = tries();
+  const done = triedDone(list);
+  const x = list.find((it) => it.id !== "checkin" && !done.has(it.id));
+  if (!x) return "";
+  return tryLink(x, `<span class="grow"><span class="small">${esc(t("result.nextTry"))}</span><br><strong>${esc(x.h)}</strong></span>${icon("arrow-right", 20)}`, "next-try");
+}
+
+/* ---------- Example phone data (see lib/signals.js) ---------- */
+
+function scenario() {
+  const s = app.store.getScenario();
+  return SCENARIO_IDS.includes(s) ? s : DEFAULT_SCENARIO;
+}
+const phoneSignals = () => (showsExamples() ? weekSignals(scenario()) : null);
+const questionsInOrder = () => orderQuestions(app.config.questions, phoneSignals());
+
+function fmtSignal(id, v) {
+  if (id === "sleep") {
+    let h = Math.floor(v), m = Math.round((v - h) * 6) * 10;
+    if (m === 60) { h += 1; m = 0; }
+    return t("signals.hours", { h, m });
+  }
+  if (id === "lateScreen") return t("signals.minutes", { m: Math.round(v / 5) * 5 });
+  return (Math.round(v / 100) * 100).toLocaleString(app.lang);
+}
+
+const signalHint = (s) => t(`signals.hint.${s.id}`, { value: fmtSignal(s.id, s.mean), usual: fmtSignal(s.id, s.usual) });
+
+function signalsCard(entry) {
+  const sigs = phoneSignals();
+  if (!sigs) return "";
+  const cur = scenario();
+  const redo = entry && entry.scenario && entry.scenario !== cur
+    ? `<div class="redo"><p class="small">${esc(t("signals.redoPrompt"))}</p><a class="btn sage sm" href="#/check/0" data-reset>${esc(t("home.redo"))}${icon("arrow-right", 18)}</a></div>`
+    : "";
+  const rows = sigs.map((s) => {
+    const status = s.notable ? s.direction : "same";
+    return `<li class="sig${s.notable ? " notable" : ""}">
+      <div class="sig-top"><strong>${esc(t(`signals.names.${s.id}`))}</strong>
+        <span class="pill ${s.notable ? "notice" : "steady"}">${esc(t(`signals.status.${status}`))}</span></div>
+      <p class="small">${esc(fmtSignal(s.id, s.mean))} ${esc(t(`signals.per.${s.id}`))}, <span class="nowrap">${esc(t("signals.usual", { value: fmtSignal(s.id, s.usual) }))}</span></p></li>`;
+  }).join("");
+  const seg = `<div class="scen" role="group" aria-label="${esc(t("signals.scenarioLabel"))}">${SCENARIO_IDS.map((id) =>
+    `<button class="btn ${id === cur ? "sage" : "ghost"}" data-scenario="${id}" aria-pressed="${id === cur}">${esc(t(`signals.scenarios.${id}`))}</button>`).join("")}</div>`;
+  return `<section class="card stack signals" data-keep="signals" aria-labelledby="sig-h">
+    <div class="row wrap"><h2 id="sig-h" class="grow">${esc(t("signals.heading"))}</h2>${exampleTag()}</div>
+    <p class="small">${esc(t("signals.simulated"))}</p>
+    <ul class="sig-list">${rows}</ul>
+    <div class="scen-box"><p><strong>${esc(t("signals.scenarioLabel"))}</strong></p><p class="small">${esc(t("signals.scenarioHint"))}</p>${seg}${redo}</div>
+  </section>`;
+}
+
+function checkContext(q) {
+  const sigs = phoneSignals();
+  if (!sigs) return "";
+  const hits = signalsFor(q, sigs);
+  if (hits.length) {
+    return `<div class="hint"><div class="row wrap"><strong class="row grow">${icon("smartphone", 18)}${esc(t("signals.noticedHeading"))}</strong>${exampleTag()}</div>
+      ${hits.map((s) => `<p>${esc(signalHint(s))}</p>`).join("")}
+      <p class="you">${esc(t("signals.youDecide"))}</p></div>`;
+  }
+  // Questions with a phone signal that looks as usual say so, so the adaptation stays visible.
+  const note = q.signals?.length ? "signals.unremarkable" : "signals.noSignal";
+  return `<p class="small row">${icon("smartphone", 18)}<span>${esc(t(note))}</span></p>`;
+}
+
+/** What the phone noticed for a result: the example week the check-in was done with. */
+function phoneSection(scenarioId) {
+  if (!showsExamples()) return "";
+  const sigs = weekSignals(SCENARIO_IDS.includes(scenarioId) ? scenarioId : scenario());
+  const hits = sigs.filter((s) => s.notable);
+  return `<div class="card stack"><div class="row wrap"><h2 class="grow h3">${esc(t("signals.resultHeading"))}</h2>${exampleTag()}</div>
+    ${hits.length
+      ? `<ul class="noticed">${hits.map((s) => `<li>${icon("smartphone", 18)}<span>${esc(signalHint(s))}</span></li>`).join("")}</ul>`
+      : `<p>${esc(t("signals.resultNone"))}</p>`}
+    <p class="small">${esc(t("signals.resultNote"))}</p></div>`;
+}
+
+/* ---------- The Quivr app frame and Dashboard (illustrative mockup, Quivr build only) ---------- */
+
+const qv = (k, vars) => esc(t(`qv.${k}`, vars));
+const deskMq = () => window.matchMedia?.("(min-width: 1100px)");
+
+/** The phone frame is built once; its text parts are redrawn by renderFrame() (language switch). */
+function buildFrame() {
+  $("app")?.remove();
+  const host = $("quivr");
+  const page = document.createElement("div");
+  page.className = "qv-page";
+  page.innerHTML = `<aside class="qv-panel" id="qv-panel"></aside><div class="qv-device" id="qv-device"></div>`;
+  host.replaceWith(page);
+  page.querySelector("#qv-device").appendChild(host);
+  page.querySelector("#qv-device").insertAdjacentHTML("beforeend", `<p class="qv-under" id="qv-under"></p>`);
+  $("quivr").innerHTML = `
+    <div class="qv-note" id="qv-note"></div>
+    <div class="qv-status" aria-hidden="true"><span>9:41</span><span class="qv-status-r"><svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.7" y="5" width="3" height="6" rx="1"/><rect x="9.4" y="2.5" width="3" height="8.5" rx="1"/><rect x="14" y="0" width="3" height="11" rx="1"/></svg><svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="3.2" stroke="currentColor" opacity=".45"/><rect x="2" y="2" width="16" height="8" rx="2" fill="currentColor"/><rect x="22.5" y="4" width="2" height="4" rx="1" fill="currentColor" opacity=".45"/></svg></span></div>
+    <header class="qv-head" id="qv-head"></header>
+    <div class="qv-stage" id="qv-stage"><div class="qv-body" id="qv-body">
+      <div class="qv-scroll" id="qv-scroll"><main id="view" tabindex="-1"></main></div>
+      <div class="qv-bottom"><div id="actions" class="actions-bar"></div><p class="qv-disc" id="qv-disc"></p></div>
+    </div></div>
+    <nav class="qv-tabs" id="qv-tabs"></nav>`;
+}
+
+function renderFrame() {
+  const langs = app.base.languages.map((l) =>
+    `<button class="lang${l === app.lang ? " on" : ""}" data-hlang="${l}" lang="${l}" aria-label="${esc(app.ui.lang.names?.[l] ?? l)}" aria-pressed="${l === app.lang}">${esc(l.toUpperCase())}</button>`).join("");
+  $("qv-note").innerHTML = `<div><strong>${qv("mockNote")}</strong><span>${qv("mockSub")}</span></div>
+    <div class="langs" role="group" aria-label="${esc(t("more.languageHeading"))}">${langs}</div>`;
+  $("qv-disc").textContent = t("qv.disc");
+  $("qv-under").textContent = t("qv.disc");
+  const langBtns = `<div class="langs" role="group" aria-label="${qv("stage.langs")}">${langs}</div>`;
+  const steps = [0, 1, 2].map((i) => `<li><span class="qv-n">${i + 1}</span><span><strong>${qv(`stage.steps.${i}.t`)}</strong><span>${qv(`stage.steps.${i}.d`)}</span></span></li>`).join("");
+  $("qv-panel").innerHTML = `<p class="qv-eyebrow">${qv("stage.eyebrow")}</p><h2>${qv("stage.title")}</h2><p class="qv-lead">${qv("stage.lead")}</p>
+    <ol class="qv-steps">${steps}</ol>
+    <p class="qv-free">${icon("shield-check", 18)}<span>${qv("stage.free")}</span></p>
+    <div class="qv-panel-row"><a class="qv-notes" href="#/quivr-view">${qv("about")}${icon("arrow-right", 16)}</a>${langBtns}</div>
+    <p class="qv-panel-note">${qv("stage.note")}</p>`;
+  renderHead();
+  renderTabs();
+  document.documentElement.lang = app.lang;
+}
+
+function renderTabs() {
+  const sub = app.screen !== "dash";
+  const tab = (id, ic, on) => {
+    const inner = `${ic ? icon(ic, 24) : '<span class="qv-q" aria-hidden="true">Q</span>'}<span>${qv(`tabs.${id}`)}</span>`;
+    // On a CalmCampus screen the Dashboard tab is how you go back, like in the real app.
+    if (on && sub) return `<a class="qv-tab on" href="#/" data-replace aria-current="page">${inner}</a>`;
+    return `<span class="qv-tab${on ? " on" : ""}"${on ? ' aria-current="page"' : ""}>${inner}</span>`;
+  };
+  $("qv-tabs").setAttribute("aria-label", t("qv.tabsLabel"));
+  $("qv-tabs").innerHTML = tab("dashboard", null, true) + tab("schedule", "clock") + tab("library", "book-open") + tab("restaurant", "utensils") + tab("more", "ellipsis");
+}
+
+/** Where the header's back arrow goes from the current CalmCampus screen. */
+function backTarget() {
+  const [name, arg] = location.hash.replace(/^#\/?/, "").split("/");
+  if (name === "check") return Number(arg) > 0 ? `#/check/${Number(arg) - 1}` : "#/";
+  if (name === "result") return app.resultBack === "history" ? "#/history" : "#/";
+  if (name === "privacy" || name === "results") return "#/about";
+  if (name === "preview") return "#/results";
+  if (name === "pick") return app.pickReturn || "#/about";
+  if (name === "support" && arg) return "#/support";
+  if (pageOf(name)) return app.pageBack || "#/about";
+  return "#/";
+}
+
+function renderHead() {
+  if (app.screen === "dash") {
+    $("qv-head").className = "qv-head";
+    $("qv-head").innerHTML = `<span class="qv-side"></span><h1>${qv("title")}</h1><span class="qv-side qv-bell">${icon("bell", 22)}<span class="sr">${qv("bell")}</span></span>`;
+    return;
+  }
+  $("qv-head").className = "qv-head sub";
+  $("qv-head").innerHTML = `<a class="qv-back" href="${esc(backTarget())}" data-replace aria-label="${qv("back")}">${icon("chevron-left", 28)}</a><h1>CalmCampus</h1><span class="qv-side"></span>`;
+}
+
+function viewDash() {
+  const c = (k, f) => qv(`cards.${k}.${f}`);
+  const ic = (name) => `<span class="qv-ic">${icon(name, 17)}</span>`;
+  return `<a class="qv-banner" href="#/check/0" data-reset data-track="frame" aria-label="${qv("banner.aria")}">
+      <svg class="qv-banner-art" viewBox="0 0 200 80" aria-hidden="true"><circle cx="170" cy="14" r="46"/><circle cx="196" cy="70" r="30"/></svg>
+      <span class="qv-banner-ic">${icon("sprout", 22)}</span>
+      <span class="qv-banner-text"><span class="qv-banner-kicker">${qv("banner.kicker")}</span><strong>${qv("banner.title")}</strong><span>${qv("banner.text")}</span></span>
+      <span class="qv-banner-go">${icon("chevron-right", 18)}<span class="sr">${qv("banner.cta")}</span></span></a>
+    <div class="qv-feed">
+      <article class="qv-card qv-event"><p class="qv-kicker">${ic("calendar-clock")}${c("event", "kicker")}</p>
+        <div class="qv-event-row"><div class="qv-start"><strong>${c("event", "start")}</strong><span>${c("event", "until")}</span></div>
+        <div class="qv-event-text"><h2>${c("event", "title")}</h2><p class="qv-meta">${c("event", "room")}</p></div></div></article>
+      <article class="qv-card"><p class="qv-kicker">${ic("clock")}${c("today", "kicker")}</p>
+        <ul class="qv-list"><li><span class="qv-time">${c("today", "t1")}</span><span>${c("today", "a1")}</span></li><li><span class="qv-time">${c("today", "t2")}</span><span>${c("today", "a2")}</span></li></ul></article>
+      <article class="qv-card"><p class="qv-kicker">${ic("book-open")}${c("library", "kicker")}</p><div class="qv-dish"><h2>${c("library", "name")}</h2><span class="qv-meta">${c("library", "hours")}</span></div>
+        <div class="qv-bar" aria-hidden="true"><i data-w="72"></i></div><p class="qv-meta"><span class="qv-dot"></span>${c("library", "count")}</p></article>
+      <article class="qv-card"><p class="qv-kicker">${ic("utensils")}${c("restaurant", "kicker")}</p><div class="qv-dish"><h2>${c("restaurant", "dish")}</h2><strong>${c("restaurant", "price")}</strong></div></article>
+      <article class="qv-card"><p class="qv-kicker">${ic("newspaper")}${c("news", "kicker")}</p><h2>${c("news", "title")}</h2></article>
+      <a class="qv-about" href="#/quivr-view">${qv("about")}${icon("arrow-right", 14)}</a>
+    </div>`;
+}
+
+/** Moves the old screen out (or the new one in) like a native navigation push/pop, about 300 ms. */
+function ghostOf(pop) {
+  const body = $("qv-body");
+  const ghost = body.cloneNode(true);
+  ghost.removeAttribute("id");
+  ghost.querySelectorAll("[id]").forEach((n) => n.removeAttribute("id"));
+  ghost.setAttribute("aria-hidden", "true");
+  ghost.setAttribute("inert", "");
+  ghost.classList.add("qv-ghost");
+  if (pop) ghost.classList.add("top");
+  const y = $("qv-scroll").scrollTop;
+  $("qv-stage").appendChild(ghost);
+  ghost.querySelector(".qv-scroll").scrollTop = y;
+  return ghost;
+}
+
+function slide(ghost, pop) {
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || !$("qv-body").animate) { ghost.remove(); return; }
+  const opts = { duration: 300, easing: "cubic-bezier(0.25, 0.8, 0.25, 1)" };
+  const body = $("qv-body");
+  body.classList.toggle("top", !pop);
+  const done = (pop ? ghost : body).animate(
+    pop ? [{ transform: "none" }, { transform: "translateX(100%)" }] : [{ transform: "translateX(100%)" }, { transform: "none" }], opts);
+  if (pop) body.animate([{ transform: "translateX(-28%)" }, { transform: "none" }], opts);
+  done.onfinish = done.oncancel = () => ghost.remove();
+}
+
+/* ---------- Screens ---------- */
+
+function viewWelcome() {
+  const icons = ["check", "smartphone", "shield-check"];
+  const texts = app.ui.welcome.points.map((p) => typo(p.replace(/\{name\}/g, uniName())));
+  if (app.base.privacyNote) texts[2] = Lt(app.base.privacyNote);
+  const points = texts.map((p, i) => `<li><span class="dot">${icon(icons[i] ?? "check", 20)}</span><span>${esc(p)}</span></li>`).join("");
+  return `<div class="stack welcome">
+    <h1>${esc(t("welcome.title"))}</h1>
+    <p class="lead">${esc(t("welcome.lead"))}</p>
+    <ul class="points">${points}</ul>
+    ${app.base.welcomeNote ? `<div class="card"><p>${esc(Lt(app.base.welcomeNote))}</p></div>` : ""}
+    ${showsExamples() ? `<p class="small row wrap example-key"><span class="pill demo">${esc(t("demo.label"))}</span><span>${esc(t("demo.explain"))}</span></p>` : ""}
+    ${pageLinks(app.base.welcomeLinks)}
+    ${installTip()}
+    <p class="small">${esc(t("welcome.later"))}</p>
+  </div>`;
+}
+
+function viewHome() {
+  const entry = app.store.entryForWeek(currentWeek());
+  const done = entry
+    ? `<div class="card stack"><h2>${icon("check", 22)} ${esc(t("home.doneTitle"))}</h2><p class="lead">${esc(t("home.doneBody"))}</p>
+        <a class="btn sage" href="#/result/${esc(entry.week)}">${esc(t("home.viewResult"))}</a>
+        <a class="btn ghost" href="#/check/0" data-reset>${esc(t("home.redo"))}</a></div>`
+    : `<a class="btn" href="#/check/0" data-reset>${esc(t("home.start"))}${icon("arrow-right", 20)}</a>`;
+  return `<div class="stack">
+    ${app.fellBack ? `<p class="card small" role="status">${esc(t("errors.config"))}</p>` : ""}
+    <div><p class="small">${esc(t("home.greeting"))}</p><h1>${esc(t("home.title"))}</h1></div>
+    ${done}
+    ${entry ? "" : `<p class="lead">${esc(t("home.lead"))}</p>`}
+    ${signalsCard(entry)}
+    <p class="small row">${icon("shield-check", 18)}<span>${esc(t("home.stays"))}</span></p>
+  </div>`;
+}
+
+const checkIndex = () => { const m = location.hash.match(/^#\/check\/(\d+)$/); return m ? Number(m[1]) : -1; };
+
+/** Returns null when it redirects, so route() stops there. */
+function viewCheck(n) {
+  const qs = questionsInOrder();
+  if (!(n >= 0 && n < qs.length)) { location.replace(HOME()); return null; }
+  // Never show a question before the earlier ones are answered, for example after the
+  // browser's back button returns into a check-in that is already finished.
+  const missing = qs.findIndex((q, i) => i < n && app.answers[q.id] === undefined);
+  if (missing !== -1) { location.replace(`#/check/${missing}`); return null; }
+  const q = qs[n];
+  const dots = qs.map((_, i) => `<i class="${i <= n ? "on" : ""}"></i>`).join("");
+  return `<div class="stack">
+    <div class="row">${backLink(n === 0 ? HOME() : `#/check/${n - 1}`, t("checkin.back"), true)}
+      <span class="small grow" style="text-align:right">${esc(t("checkin.progress", { n: n + 1, total: qs.length }))}</span></div>
+    <div class="progress" aria-hidden="true">${dots}</div>
+    ${isQuivr() && n === 0 ? `<p class="qv-kick">CalmCampus</p>` : ""}
+    <p class="small">${esc(t("checkin.heading"))}</p>
+    <h1 class="question" id="q">${esc(Lt(q.text))}</h1>
+    ${checkContext(q)}</div>`;
+}
+
+/** Yes, No and Skip sit in the bottom dock during the check-in, so they are always in reach. */
+function checkAnswers(n) {
+  const q = questionsInOrder()[n];
+  if (!q) return "";
+  const picked = app.answers[q.id];
+  return `<div class="answers" role="group" aria-labelledby="q">
+      <button class="btn ${picked === true ? "picked" : ""}" data-answer="yes" data-n="${n}">${esc(t("checkin.yes"))}</button>
+      <button class="btn ${picked === false ? "picked" : ""}" data-answer="no" data-n="${n}">${esc(t("checkin.no"))}</button>
+      <button class="btn link" data-answer="skip" data-n="${n}">${esc(t("checkin.skip"))}</button>
+    </div>`;
+}
+
+/** `level`: the heading level, 2 when the card sits right under the page title (Support), else 3. */
+function serviceCard(id, { actions = true, level = 3 } = {}) {
+  const s = app.config.services[id];
+  if (!s) return "";
+  const c = s.contact || {};
+  const link = L(c.link), hours = Lt(c.hours), note = Lt(s.note);
+  const btns = [];
+  if (c.email) btns.push({ href: `mailto:${c.email}`, label: t("service.email"), ic: "mail", ext: false });
+  // A website in another language than the reader's says so on its button, for
+  // example "(Dutch only)": the config's linkNote, else from the page's language.
+  const pageLang = linkLanguage(c, app.lang);
+  const linkNote = c.linkNote?.[app.lang] ?? (pageLang && pageLang !== app.lang ? app.ui.service.pageIn?.[pageLang] : null);
+  if (link) btns.push({ href: link, label: linkNote ? `${t("service.website")} ${typo(linkNote)}` : t("service.website"), ic: "external-link", ext: true, hreflang: pageLang });
+  if (c.phone) btns.push({ href: `tel:${c.phone.replace(/\s/g, "")}`, label: `${t("service.call")} ${c.phone}`, ic: "phone", ext: false });
+  const buttons = actions && btns.length
+    ? `<div class="actions">${btns.map((b, i) => `<a class="btn ${i ? "ghost" : ""}" href="${esc(b.href)}" ${b.ext ? 'target="_blank" rel="noopener noreferrer"' : ""}${b.hreflang ? ` hreflang="${esc(b.hreflang)}"` : ""}>${icon(b.ic, 20)}${esc(b.label)}</a>`).join("")}</div>`
+    : "";
+  return `<section class="card service" aria-labelledby="s-${esc(id)}">
+    <h${level} id="s-${esc(id)}" class="h3">${esc(Lt(s.name))}</h${level}>
+    <p>${esc(Lt(s.purpose))}</p>
+    ${note ? `<p class="small">${esc(note)}</p>` : ""}
+    ${btns.length ? "" : `<p class="small">${esc(t("service.noContact"))}</p>`}
+    ${buttons}
+    ${hours ? `<p class="meta">${icon("clock", 16)} ${esc(hours)}</p>` : ""}
+    ${c.email && actions ? `<p class="small" style="margin-top:8px">${esc(t("service.emailNote"))}</p>` : ""}
+  </section>`;
+}
+
+function emergencyCard() {
+  const items = app.config.emergency.map((e) => `<div class="em-item">
+      <div class="label">${esc(Lt(e.label))}</div>
+      <a class="call" href="tel:${esc(e.tel)}">${icon("phone", 22)}${esc(typo(e.number))}</a>
+      <div class="detail">${esc(Lt(e.detail))}</div></div>`).join("");
+  return `<section class="emergency" aria-labelledby="em-h">
+    <h2 id="em-h">${icon("siren", 24)}${esc(t("result.emergencyHeading"))}</h2>
+    <p class="intro">${esc(t("result.emergencyIntro"))}</p>${items}</section>`;
+}
+
+function viewResult(answers, { saved, example, phone, scenarioId, back } = {}) {
+  const c = app.config;
+  const r = resultFor(c, answers);
+  const yesQs = c.questions.filter((q) => answers[q.id] === true);
+  const skipped = c.questions.filter((q) => answers[q.id] === null).length;
+  const lv = r.level;
+  const noticed = yesQs.length
+    ? `<ul class="noticed">${yesQs.map((q) => `<li>${icon("check", 18)}<span>${esc(Lt(q.text))}</span></li>`).join("")}</ul>`
+    : `<p class="lead">${esc(t("result.noneNoticed"))}</p>`;
+  const next = lv.service && c.services[lv.service]
+    ? serviceCard(lv.service)
+    : `<div class="card stack"><p>${esc(lv.minYes > 0 && c.advice ? Lt(c.advice) : t("result.steadyNext"))}</p><a class="btn sage" href="#/support">${esc(t("result.seeSupport"))}</a></div>`;
+  return `<div class="stack">
+    ${back ? `<div>${backLink(back.href, back.label)}</div>` : ""}
+    <div class="level-head">${isQuivr() ? `<svg class="qv-hero-art" viewBox="0 0 120 120" aria-hidden="true"><circle cx="90" cy="30" r="56"/><circle cx="108" cy="104" r="34"/></svg><span class="qv-hero-ic">${icon("sprout", 26)}</span>` : ""}<div class="row wrap"><span class="small">${esc(t(example ? "result.exampleKicker" : "result.kicker"))}</span>${pillFor(lv)}</div>
+      <h1>${esc(t(`result.levels.${lv.id}.title`))}</h1></div>
+    <p class="lead">${esc(t(`result.levels.${lv.id}.body`))}</p>
+    <div class="card stack"><h2 class="h3">${esc(t("result.noticedHeading"))}</h2>${noticed}
+      ${skipped ? `<p class="small">${esc(t("result.skipped", { n: skipped, total: c.questions.length }))}</p>` : ""}</div>
+    ${phone ? phoneSection(scenarioId) : ""}
+    <h2>${esc(t("result.nextHeading"))}</h2>
+    ${next}
+    ${emergencyCard()}
+    ${saved ? `<p class="small row">${icon("shield-check", 18)}<span>${esc(t("result.saved"))}</span></p>` : ""}
+    ${saved ? nextTryCard() : ""}
+    ${isQuivr() && !back ? `<a class="btn" href="#/" data-replace>${esc(t("qv.toDash"))}</a>
+      <nav class="qv-links" aria-label="CalmCampus">${[["history", "#/history"], ["support", "#/support"], ["about", "#/about"]].map(([id, h]) => `<a href="${h}">${esc(t(`nav.${id}`))}</a>`).join("")}</nav>`
+      : `<a class="btn ghost" href="${back ? back.href : HOME()}">${esc(back ? back.label : t("result.again"))}</a>`}</div>`;
+}
+
+/** Every level, how many yes answers lead to it and where it points: what a university reviews. */
+function viewResults() {
+  const c = app.config;
+  const total = c.questions.length;
+  const items = levelRanges(c).map(({ level: lv, lo, hi }) => {
+    const range = lo === hi ? `${lo}` : `${lo}–${hi}`;
+    const target = lv.service ? Lt(c.services[lv.service]?.name) : t("results.supportList");
+    return `<li><a href="#/preview/${esc(lv.id)}">
+      <span class="grow stack-tight">${pillFor(lv)}<strong>${esc(t(`result.levels.${lv.id}.title`))}</strong>
+        <span class="small">${esc(t("results.yes", { range, total }))}</span>
+        <span class="small">${esc(t("results.suggests", { target }))}</span></span>${icon("arrow-right", 20)}</a></li>`;
+  }).join("");
+  return `<div class="stack">
+    <div>${backLink("#/about", t("checkin.back"))}</div>
+    <h1>${esc(t("results.title"))}</h1>
+    <p class="lead">${esc(t("results.lead"))}</p>
+    ${hasInstitutions() ? `<p class="small">${esc(t("results.forInstitution"))} <a href="#/pick">${esc(t("pick.change"))}</a></p>` : ""}
+    <ul class="level-list">${items}</ul>
+    <p class="small row">${icon("siren", 18)}<span>${esc(t("results.emergencyNote"))}</span></p></div>`;
+}
+
+function fmtDate(iso) {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString(app.lang, { day: "numeric", month: "short" });
+}
+
+/** Weeks are labelled by their Monday, whichever day the check-in was done. */
+function fmtWeek(e) { return fmtDate(weekStart(new Date(`${e.date}T12:00:00`))); }
+/** Compact label for the chart, for example 28/9 or 9/28 depending on the language. */
+function fmtShort(e) {
+  return new Date(`${weekStart(new Date(`${e.date}T12:00:00`))}T12:00:00`).toLocaleDateString(app.lang, { day: "numeric", month: "numeric" });
+}
+
+function viewHistory() {
+  const entries = app.store.entries();
+  if (!entries.length) {
+    return `<div class="stack"><h1>${esc(t("history.title"))}</h1><p class="lead">${esc(t("history.empty"))}</p></div>`;
+  }
+  const total = app.config.questions.length;
+  const rows = entries.map((e) => ({ e, r: resultFor(app.config, e.answers) }));
+  // The chart shows the last seven weeks so it always fits a small phone; the list has them all.
+  const recent = rows.slice(-7);
+  const chart = recent.map(({ e, r }) => `<div class="col"><div class="bar l-${esc(r.level.id)}" style="height:${Math.max(4, (r.yes / total) * 100)}%"></div><span class="lab${e.demo ? "" : " own"}">${esc(fmtShort(e))}</span></div>`).join("");
+  const item = ({ e, r }) => `<li><a href="#/result/${esc(e.week)}" aria-label="${esc(t("history.open"))}: ${esc(t("history.weekOf", { date: fmtWeek(e) }))}">
+      <span class="grow"><strong>${esc(t("history.weekOf", { date: fmtWeek(e) }))}</strong>
+        <span class="week-meta">${pillFor(r.level)}<span class="small">${esc(t("history.signs", { n: r.yes, total }))}</span></span></span>${icon("arrow-right", 18)}</a></li>`;
+  const newestFirst = [...rows].reverse();
+  const thisWeek = app.store.entryForWeek(currentWeek());
+  const open = thisWeek && !thisWeek.demo ? "" : `<a class="week-now" href="#/check/0" data-reset><span class="grow"><strong>${esc(t("history.weekOf", { date: fmtDate(weekStart(new Date())) }))}</strong><br><span class="small">${esc(t("history.notYet"))}</span></span>${icon("arrow-right", 18)}</a>`;
+  const own = newestFirst.filter(({ e }) => !e.demo), examples = newestFirst.filter(({ e }) => e.demo);
+  const lists = examples.length
+    ? `<h2>${esc(t("history.ownHeading"))}</h2>${open}
+       ${own.length ? `<ul class="week-list">${own.map(item).join("")}</ul>` : open ? "" : `<p class="small">${esc(t("history.ownEmpty"))}</p>`}
+       <div class="row wrap"><h2 class="grow">${esc(t("history.examplesHeading"))}</h2>${exampleTag()}</div>
+       <ul class="week-list">${examples.map(item).join("")}</ul>`
+    : `<h2>${esc(t("history.listHeading"))}</h2>${open}<ul class="week-list">${own.map(item).join("")}</ul>`;
+  return `<div class="stack"><h1>${esc(t("history.title"))}</h1>
+    ${examples.length ? `<p class="small">${esc(t("history.examplesNote"))}</p>` : ""}
+    <div class="card"><h2 class="h3">${esc(t("history.trendHeading"))}</h2><div class="chart" role="img" aria-label="${esc(t("history.chartLabel"))}: ${recent.map(({ e, r }) => `${fmtWeek(e)} ${r.yes}/${total}`).join(", ")}">${chart}</div></div>
+    ${lists}</div>`;
+}
+
+function supportDirectory() {
+  const insts = institutionsOf(app.base);
+  const row = (i, light) => `<li><a class="pick${light ? " light" : ""}" href="#/support/${esc(i.id)}"><span class="grow"><strong>${esc(Lt(i.name))}</strong>${i.hint ? `<br><span class="small">${esc(Lt(i.hint))}</span>` : ""}</span>${icon("arrow-right", 20)}</a></li>`;
+  const main = insts.filter((i) => i.id !== "other"), other = insts.filter((i) => i.id === "other");
+  return `<div class="stack"><h1>${esc(t("qv.supportTitle"))}</h1><p class="lead">${esc(t("qv.supportLead"))}</p>
+    <h2>${esc(t("qv.supportWhere"))}</h2>
+    <ul class="pick-list">${main.map((i) => row(i, false)).join("")}${other.map((i) => row(i, true)).join("")}</ul>${emergencyCard()}</div>`;
+}
+
+function viewSupport(arg) {
+  // On the Quivr demo Support is a directory of Flanders institutions, not a picker gate:
+  // nothing is stored, and each row simply opens that institution's services.
+  if (isQuivr()) {
+    const inst = institutionsOf(app.base).find((i) => i.id === arg);
+    if (!inst) return supportDirectory();
+    const keep = app.config;
+    app.config = institutionConfig(app.base, inst.id);
+    try { return supportPage(); } finally { app.config = keep; }
+  }
+  return supportPage();
+}
+
+function supportPage() {
+  const c = app.config;
+  return `<div class="stack">
+    <h1>${esc(t("more.supportHeading"))}</h1>
+    ${Object.keys(c.services).length
+      ? `<p class="lead">${esc(t("more.supportLead"))}</p>${Object.keys(c.services).map((id) => serviceCard(id, { level: 2 })).join("")}`
+      : `<div class="card"><p>${esc(c.advice ? Lt(c.advice) : t("service.noContact"))}</p></div>`}
+    ${emergencyCard()}</div>`;
+}
+
+function resetCard() {
+  // Preview builds call it "Start over" (the examples come back); otherwise "Delete my data".
+  const k = isPreview() ? "about.startOver" : "more.delete";
+  if (app.deleted) return `<p class="card" data-keep="delete" role="status">${esc(t(`${k}Done`))}</p>`;
+  const ic = isPreview() ? "rotate-ccw" : "trash-2";
+  if (app.confirmDelete) {
+    return `<div class="card stack" data-keep="delete" role="alertdialog" aria-label="${esc(t(`${k}Confirm`))}"><p><strong>${esc(t(`${k}Confirm`))}</strong></p>
+      <button class="btn danger" data-delete="yes">${icon(ic, 20)}${esc(t(`${k}Yes`))}</button>
+      <button class="btn ghost" data-delete="no">${esc(t(`${k}Cancel`))}</button></div>`;
+  }
+  return `<div class="card stack" data-keep="delete"><h3>${esc(t(`${k}Heading`))}</h3><p class="small">${esc(t(`${k}Body`))}</p>
+    <button class="btn danger" data-delete="ask">${icon(ic, 20)}${esc(t(`${k}Button`))}</button></div>`;
+}
+
+function viewAbout() {
+  const c = app.config;
+  const mail = feedbackHref();
+  const list = tries();
+  const done = triedDone(list);
+  const tryList = isPreview()
+    ? `<section class="stack"><div><h2>${esc(t("about.tryHeading"))}</h2>
+        <p class="small">${esc(t(done.size === list.length ? "about.allDone" : "about.progress", { n: done.size, total: list.length }))}</p></div>
+        <ol class="try">${list.map((x, i) => {
+          const ok = done.has(x.id);
+          const num = ok ? `<span class="num done">${icon("check", 18)}<span class="sr">${esc(t("about.doneLabel"))}</span></span>` : `<span class="num">${i + 1}</span>`;
+          return `<li>${tryLink(x, `${num}<span class="grow"><strong>${esc(x.h)}</strong><br><span class="small">${esc(x.p)}</span></span>${icon("arrow-right", 18)}`, ok ? "done" : "")}</li>`;
+        }).join("")}</ol></section>`
+    : "";
+  const uni = hasInstitutions()
+    ? `<a class="link-row" href="#/pick"><span class="row">${icon("life-buoy", 20)}<span><span class="small">${esc(t("pick.current"))}</span><br><strong>${esc(typo(L(app.config.name)))}</strong></span></span><span class="small">${esc(t("pick.change"))}</span></a>`
+    : "";
+  const ap = app.base.aboutPages;
+  const pages = ap?.ids?.length ? `<section class="stack"><h2>${esc(Lt(ap.heading))}</h2>${pageLinks(ap.ids)}</section>` : "";
+  const demo = isPreview() ? "" : showsExamples()
+    ? `<div class="card stack" data-keep="demo"><h3>${esc(t("demo.toggleTitle"))}</h3><p class="small">${esc(t("demo.toggleOn"))}</p>
+        <button class="btn ghost" data-demo="off">${esc(t("demo.turnOff"))}</button>
+        <a class="btn ghost" href="#/results">${esc(t("results.title"))}</a></div>`
+    : `<div class="card stack" data-keep="demo"><h3>${esc(t("demo.toggleTitle"))}</h3><p class="small">${esc(t("demo.toggleOff"))}</p>
+        <button class="btn ghost" data-demo="on">${esc(t("demo.turnOn"))}</button></div>`;
+  return `<div class="stack">
+    <h1>${esc(t(isPreview() ? "about.title" : "nav.about"))}</h1>
+    ${isPreview() ? `<p class="lead">${esc(t("about.intro"))}</p>` : ""}
+    ${tryList}
+    ${uni}
+    ${pages}
+    <h2>${esc(t("more.languageHeading"))}</h2>${langButtons("lang")}
+    <div class="card stack"><h3>${esc(t("more.feedbackHeading"))}</h3><p class="small">${esc(t("more.feedbackBody"))}</p>
+      <a class="btn sage" href="${esc(mail)}" data-track="feedback">${icon("mail", 20)}${esc(t("more.feedbackButton"))}</a></div>
+    <a class="link-row" href="#/privacy"><span class="row">${icon("shield-check", 20)}${esc(t("more.privacyLink"))}</span>${icon("arrow-right", 18)}</a>
+    ${installTip()}
+    ${demo}
+    ${resetCard()}
+    <p class="small version">${esc(t("about.credit"))}</p>
+    <p class="small version">${esc(t("more.version", { v: document.querySelector('meta[name="cc-build"]')?.content || "dev" }))}</p></div>`;
+}
+
+function viewPrivacy() {
+  const pts = app.ui.privacy.points.map((p) => `<div><dt>${esc(typo(p.h))}</dt><dd>${esc(typo(p.p.replace(/\{name\}/g, uniName())))}</dd></div>`).join("");
+  return `<div class="stack privacy"><div>${backLink("#/about", t("checkin.back"))}</div>
+    <h1>${esc(t("privacy.title"))}</h1><p class="lead">${esc(t("privacy.intro"))}</p>
+    ${app.base.privacyNote ? `<div class="hint"><p>${esc(Lt(app.base.privacyNote))}</p></div>` : ""}
+    <div class="card"><dl>${pts}</dl></div><p class="small">${esc(app.base.privacyPrinciples ? Lt(app.base.privacyPrinciples) : t("privacy.principles"))}</p></div>`;
+}
+
+function pickItems() {
+  const cur = app.store.getUni();
+  return institutionsOf(app.base).map((i) => {
+    const on = i.id === cur;
+    return `<li><button class="pick${on ? " on" : ""}" data-uni="${esc(i.id)}" aria-pressed="${on}"><span class="grow"><strong>${esc(Lt(i.name))}</strong>${i.hint ? `<br><span class="small">${esc(Lt(i.hint))}</span>` : ""}</span>${icon(on ? "check" : "arrow-right", 20)}</button></li>`;
+  }).join("");
+}
+
+/** "Which university are you at?": once, and again from About to change it. */
+function viewPick() {
+  const cur = app.store.getUni();
+  const known = institutionsOf(app.base).some((i) => i.id === cur);
+  const items = pickItems();
+  return `<div class="stack">
+    ${known ? `<div>${backLink(app.pickReturn || "#/about", t("checkin.back"))}</div>` : ""}
+    <h1>${esc(t("pick.title"))}</h1>
+    <p class="lead">${esc(t("pick.lead"))}</p>
+    <ul class="pick-list">${items}</ul></div>`;
+}
+
+function pageLinks(ids) {
+  const list = (ids ?? []).map(pageOf).filter(Boolean);
+  if (!list.length) return "";
+  return `<div class="link-list">${list.map((pg) => `<a class="link-row" href="#/${esc(pg.id)}"><span>${esc(Lt(pg.linkLabel ?? pg.title))}</span>${icon("arrow-right", 18)}</a>`).join("")}</div>`;
+}
+
+/** Blocks of a config page: headings, paragraphs, notes, lists, steps, tables, boxes. */
+function block(b) {
+  if (b.h) return `<h2>${esc(Lt(b.h))}</h2>`;
+  if (b.p) return `<p>${esc(Lt(b.p))}</p>`;
+  if (b.note) return `<div class="hint"><p>${esc(Lt(b.note))}</p></div>`;
+  if (b.list) return `<ul class="bullets">${(L(b.list) ?? []).map((x) => `<li>${esc(typo(x))}</li>`).join("")}</ul>`;
+  if (b.items) return `<ol class="timeline">${b.items.map((it) => `<li><strong>${esc(Lt(it.h))}</strong><span>${esc(Lt(it.p))}</span></li>`).join("")}</ol>`;
+  if (b.box) return `<div class="card stack box">${b.box.map(block).join("")}</div>`;
+  if (b.links) return pageLinks(b.links);
+  if (b.concept) return conceptMock(b.concept);
+  if (b.frame) return frameMock(b.frame);
+  if (b.table) {
+    const tb = b.table;
+    const head = L(tb.head) ?? [], rows = L(tb.rows) ?? [];
+    // Made-up numbers always carry the Example label ("info" tables hold no numbers).
+    const tag = tb.label === "example" ? `<span class="pill demo">${esc(t("demo.label"))}</span>` : "";
+    return `<div class="card stack table-card"><div class="row wrap"><h2 class="grow h3">${esc(Lt(tb.caption))}</h2>${tag}</div>
+      ${tb.note ? `<p class="small">${esc(Lt(tb.note))}</p>` : ""}
+      <div class="table-wrap"><table><thead><tr>${head.map((h) => `<th scope="col">${esc(typo(h))}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map((r) => `<tr>${r.map((cell, i) => (i ? `<td data-label="${esc(typo(head[i] ?? ""))}">${esc(typo(cell))}</td>` : `<th scope="row">${esc(typo(cell))}</th>`)).join("")}</tr>`).join("")}</tbody></table></div></div>`;
+  }
+  return "";
+}
+
+/**
+ * A concept mockup (a page block `concept`): an interactive phone with a few screens of
+ * something that is not built, labelled as such on every screen. It only uses example
+ * data, keeps its state in memory, and reads no sensor.
+ */
+const conceptState = () => (app.concept ??= { step: 0, answered: false, q: 0, perms: {} });
+
+function conceptMock(cn) {
+  const st = conceptState();
+  const step = Math.min(st.step, cn.screens.length - 1);
+  const sc = cn.screens[step];
+  const qStep = cn.screens.findIndex((x) => x.type === "questions");
+  const tabs = `<div class="concept-tabs" role="tablist" aria-label="${esc(Lt(cn.tabsLabel))}">${cn.screens.map((x, i) =>
+    `<button class="btn ${i === step ? "sage" : "ghost"} sm" role="tab" aria-selected="${i === step}" data-concept-step="${i}">${esc(Lt(x.tab))}</button>`).join("")}</div>`;
+  let body = "";
+  if (sc.type === "banner") {
+    body = `${st.answered ? "" : `<div class="concept-banner"><span>${esc(Lt(sc.banner))}</span>${qStep > -1 ? `<button class="btn sm" data-concept-step="${qStep}">${esc(Lt(sc.button))}</button>` : ""}</div>`}
+      <div class="mock-bars" aria-hidden="true"><i></i><i></i><i class="short"></i><i></i></div>`;
+  } else if (sc.type === "questions") {
+    const qs = app.config.questions;
+    body = st.q < qs.length
+      ? `<p class="small">${esc(t("checkin.progress", { n: st.q + 1, total: qs.length }))}</p><p class="concept-q">${esc(Lt(qs[st.q].text))}</p>
+        <div class="concept-answers"><button class="btn sm" data-concept-answer="yes">${esc(t("checkin.yes"))}</button><button class="btn sm ghost" data-concept-answer="no">${esc(t("checkin.no"))}</button></div>`
+      : `<p class="concept-q">${esc(Lt(sc.done))}</p><button class="btn sm ghost" data-concept-restart>${esc(Lt(sc.again))}</button>`;
+  } else if (sc.type === "overview") {
+    const weeks = demoEntries(app.config).map((e) => resultFor(app.config, e.answers));
+    body = `<div class="row wrap"><strong class="grow">${esc(Lt(sc.heading))}</strong><span class="pill demo">${esc(t("demo.label"))}</span></div>
+      <div class="concept-chart" role="img" aria-label="${esc(t("history.chartLabel"))}">${weeks.map((r) => `<i class="l-${esc(r.level.id)}" style="height:${Math.max(8, (r.yes / r.total) * 100)}%"></i>`).join("")}</div>
+      <p class="small">${esc(Lt(sc.text))}</p>`;
+  } else if (sc.type === "permissions") {
+    body = `<p class="small">${esc(Lt(sc.intro))}</p><ul class="perm-list">${sc.items.map((it) => {
+      const on = st.perms[it.id] === true;
+      return `<li><span class="grow">${esc(Lt(it.label))}</span><button class="switch" role="switch" aria-checked="${on}" aria-label="${esc(Lt(it.label))}" data-concept-perm="${esc(it.id)}"><i></i></button></li>`;
+    }).join("")}</ul><p class="small"><strong>${esc(Lt(sc.note))}</strong></p>`;
+  }
+  const weekToggle = sc.type === "banner" && sc.weekLabel
+    ? `<div class="seg" role="group" aria-label="${esc(Lt(sc.weekLabel))}"><button class="btn ${st.answered ? "ghost" : "sage"} sm" aria-pressed="${!st.answered}" data-concept-answered="no">${esc(Lt(sc.notAnswered))}</button><button class="btn ${st.answered ? "sage" : "ghost"} sm" aria-pressed="${st.answered}" data-concept-answered="yes">${esc(Lt(sc.answered))}</button></div>`
+    : "";
+  return `<div class="concept stack" data-keep="concept">${tabs}
+    <figure class="mock"><figcaption class="mock-label concept-label">${esc(Lt(cn.label))}</figcaption>
+      <div class="mock-phone"><div class="mock-screen"><div class="mock-app">${esc(Lt(cn.app))}</div><p class="concept-title">${esc(Lt(sc.title))}</p>${body}</div></div></figure>
+    ${weekToggle}
+    ${sc.caption ? `<p class="small">${esc(Lt(sc.caption))}</p>` : ""}</div>`;
+}
+
+/** A plainly generic phone with one CalmCampus card: how a partner app could show it. */
+function frameMock(f) {
+  return `<figure class="mock">
+    <figcaption class="mock-label">${esc(Lt(f.label))}</figcaption>
+    <div class="mock-phone"><div class="mock-screen">
+      <div class="mock-app">${esc(Lt(f.app))}</div>
+      <div class="mock-bars" aria-hidden="true"><i></i><i></i><i class="short"></i></div>
+      <a class="mock-card mock-banner" href="#/" data-track="frame" aria-label="CalmCampus. ${esc(Lt(f.card.text))} ${esc(Lt(f.card.button))}">
+        <span class="mock-kicker">CalmCampus</span><span>${esc(Lt(f.card.text))}</span>
+        <span class="btn sm" aria-hidden="true">${esc(Lt(f.card.button))}${icon("arrow-right", 18)}</span></a>
+      <div class="mock-bars" aria-hidden="true"><i></i><i class="short"></i></div>
+    </div></div></figure>`;
+}
+
+function viewPage(pg) {
+  return `<div class="stack page"><div>${backLink(app.pageBack || "#/about", t("checkin.back"))}</div>
+    ${pg.eyebrow ? `<p class="small">${esc(Lt(pg.eyebrow))}</p>` : ""}
+    <h1>${esc(Lt(pg.title))}</h1>
+    ${pg.lead ? `<p class="lead">${esc(Lt(pg.lead))}</p>` : ""}
+    ${pg.frame ? frameMock(pg.frame) : ""}
+    ${(pg.blocks ?? []).map(block).join("")}</div>`;
+}
+
+/* ---------- Routing and events ---------- */
+
+/**
+ * Re-render the current screen in place, for taps that change something on it
+ * (language, example week, start over). The section that was tapped (its
+ * `data-keep`) stays at the same spot on screen, and focus moves to `focusSel`
+ * inside it without scrolling. Moving to another screen goes through route().
+ */
+function refresh(fromEl = null, focusSel = null, alsoRender = null) {
+  const key = fromEl?.closest("[data-keep]")?.dataset.keep;
+  const before = key ? document.querySelector(`[data-keep="${key}"]`).getBoundingClientRect().top : null;
+  const y = getY();
+  // Measure first, then change the header or banner (Safari has no scroll anchoring),
+  // and keep the page at least as tall as it was, so a section that shrinks at the
+  // bottom of the page does not pull everything up.
+  const view = $("view");
+  view.style.minHeight = `${view.offsetHeight}px`;
+  alsoRender?.();
+  route({ inPlace: true });
+  const anchor = key && document.querySelector(`[data-keep="${key}"]`);
+  if (anchor) setY(getY() + anchor.getBoundingClientRect().top - before);
+  else setY(y);
+  const f = focusSel && document.querySelector(focusSel);
+  if (f) {
+    if (!f.matches("a, button")) f.setAttribute("tabindex", "-1");
+    f.focus({ preventScroll: true });
+  }
+}
+
+function route(opts) {
+  const inPlace = opts?.inPlace === true;
+  const hash = location.hash.replace(/^#\/?/, "");
+  const [name, arg] = hash.split("/");
+  if (name === "more") { location.replace("#/about"); return; }
+  if (isQuivr() && name === "home") { location.replace("#/"); return; }
+  const dash = isQuivr() && !name;
+  if ((!name || name === "home") && isPreview() && !isQuivr() && !app.store.isWelcomed()) { location.replace("#/welcome"); return; }
+  if (!dash && needsPick() && ["", "home", "check", "result", "history", "support", "results", "preview"].includes(name || "")) { location.replace("#/pick"); return; }
+  // Remember where each tab was scrolled, so coming back to it (from Privacy, a
+  // result or a preview) lands where you left it instead of at the top.
+  if (!inPlace && TABS.has(app.screen)) app.tabScroll[app.screen] = getY();
+  const from = app.screen;
+  if (!inPlace) app.screen = dash ? "dash" : name || "home";
+  // The preview line is hidden on the welcome screen and during the check-in.
+  const bare = (s) => s === "welcome" || s === "check";
+  if (!isQuivr() && from !== app.screen && (bare(from) || bare(app.screen) || from === "dash")) renderShell();
+  const view = $("view");
+  let html = "", nav = "home";
+  if (dash) { nav = null; html = viewDash(); }
+  else if (name === "welcome") { nav = null; html = viewWelcome(); }
+  else if (name === "pick") {
+    if (!inPlace && from !== "pick") app.pickReturn = ["about", "results", "support"].includes(from) ? `#/${from}` : null;
+    nav = needsPick() ? null : "about"; html = viewPick();
+  } else if (pageOf(name)) {
+    if (!inPlace && from !== name) app.pageBack = from === "welcome" ? "#/welcome" : from === "dash" ? "#/" : "#/about";
+    nav = "about"; html = viewPage(pageOf(name));
+    if (isPreview()) app.store.markTried(`page:${name}`);
+  }
+  else if (name === "check") { nav = null; html = viewCheck(Number(arg)); if (html === null) return; }
+  else if (name === "result") {
+    const e = app.store.entryForWeek(arg || currentWeek());
+    if (!e) { location.replace(HOME()); return; }
+    const own = !e.demo;
+    const fromHistory = inPlace ? app.resultBack === "history" : from === "history";
+    if (!inPlace) app.resultBack = fromHistory ? "history" : null;
+    html = viewResult(e.answers, {
+      saved: own, example: !own, phone: own && e.week === currentWeek(), scenarioId: e.scenario,
+      back: fromHistory ? { href: "#/history", label: t("history.title") } : null,
+    });
+    nav = fromHistory ? "history" : "home";
+  } else if (name === "preview") {
+    const lv = app.config.levels.find((l) => l.id === arg);
+    if (!lv) { location.replace("#/results"); return; }
+    html = viewResult(answersForLevel(app.config, lv), { example: true, back: { href: "#/results", label: t("results.back") } });
+    nav = "about";
+  } else if (name === "results") { nav = "about"; html = viewResults(); if (isPreview()) app.store.markTried("results"); }
+  else if (name === "history") { nav = "history"; html = viewHistory(); }
+  else if (name === "support") { nav = "support"; html = viewSupport(arg); if (isPreview()) app.store.markTried("support"); }
+  else if (name === "about") { nav = "about"; html = viewAbout(); }
+  else if (name === "privacy") { nav = "about"; html = viewPrivacy(); }
+  else html = viewHome();
+  if (name !== "about") { app.confirmDelete = false; app.deleted = false; }
+  const depth = dash ? 0 : 1;
+  const ghost = isQuivr() && !inPlace && app.depth !== undefined && app.depth !== depth ? ghostOf(depth === 0) : null;
+  if (isQuivr()) app.depth = depth;
+  view.innerHTML = html;
+  view.querySelectorAll("[data-w]").forEach((el) => { el.style.width = `${el.dataset.w}%`; });
+  $("actions").innerHTML = name === "check" ? checkAnswers(Number(arg))
+    : name === "welcome" ? `<button class="btn" data-welcome>${esc(t("welcome.start"))}${icon("arrow-right", 20)}</button>` : "";
+  renderNav(nav);
+  syncDock();
+  if (isQuivr()) { renderHead(); renderTabs(); }
+  if (!inPlace) {
+    view.style.minHeight = "";
+    const back = TABS.has(app.screen) && from !== "check" && from !== app.screen ? app.tabScroll[app.screen] : 0;
+    setY(back || 0);
+    view.focus({ preventScroll: true });
+    if (ghost) slide(ghost, depth === 0);
+  }
+}
+
+function onClick(ev) {
+  const track = ev.target.closest("[data-track]")?.dataset.track;
+  if (track) app.store.markTried(track);
+  const cEl = ev.target.closest("[data-concept-step],[data-concept-answer],[data-concept-perm],[data-concept-answered],[data-concept-restart]");
+  if (cEl) {
+    const st = conceptState();
+    const d = cEl.dataset;
+    if (d.conceptStep !== undefined) st.step = Number(d.conceptStep);
+    if (d.conceptAnswer) { st.q += 1; if (st.q >= app.config.questions.length) st.answered = true; }
+    if (d.conceptRestart !== undefined) { st.q = 0; st.answered = false; }
+    if (d.conceptAnswered) st.answered = d.conceptAnswered === "yes";
+    if (d.conceptPerm) st.perms[d.conceptPerm] = !st.perms[d.conceptPerm];
+    const sel = d.conceptPerm ? `[data-concept-perm="${d.conceptPerm}"]` : d.conceptStep !== undefined ? `[data-concept-step="${d.conceptStep}"]` : d.conceptAnswered ? `[data-concept-answered="${d.conceptAnswered}"]` : null;
+    refresh(cEl, sel);
+    return;
+  }
+  const el = ev.target.closest("[data-answer],[data-lang],[data-hlang],[data-uni],[data-demo],[data-delete],[data-reset],[data-scenario],[data-welcome],[data-replace]");
+  if (!el) return;
+  if (el.dataset.reset !== undefined) { app.answers = {}; return; }
+  if (el.dataset.replace !== undefined) {
+    // Inside the check-in, moving between questions replaces the history entry, so the
+    // whole check-in is one step back: the phone's back button returns to where it started.
+    ev.preventDefault();
+    location.replace(el.getAttribute("href"));
+    return;
+  }
+  if (el.dataset.hlang) { if (el.dataset.hlang !== app.lang) setLang(el.dataset.hlang); return; }
+  if (el.dataset.uni) {
+    if (!institutionsOf(app.base).some((i) => i.id === el.dataset.uni)) return;
+    app.store.setUni(el.dataset.uni);
+    if (isPreview()) app.store.markTried("uni");
+    applyUni();
+    renderShell();
+    const dest = app.pickReturn || HOME();
+    if (location.hash === dest) route({ inPlace: true }); else location.replace(dest);
+    return;
+  }
+  if (el.dataset.welcome !== undefined) {
+    app.store.setWelcomed();
+    location.replace(HOME());
+    return;
+  }
+  if (el.dataset.answer) {
+    const n = Number(el.dataset.n);
+    // Ignore a second tap while moving on, and taps on a question that is no longer shown.
+    if (app.advancing || n !== checkIndex()) return;
+    const qs = questionsInOrder();
+    const q = qs[n];
+    if (!q) return;
+    const v = el.dataset.answer;
+    app.answers[q.id] = v === "yes" ? true : v === "no" ? false : null;
+    el.closest(".answers")?.querySelectorAll("[data-answer]").forEach((b) => b.classList.toggle("picked", b === el && v !== "skip"));
+    app.advancing = true;
+    // A short pause shows which answer was taken before the next question appears.
+    setTimeout(() => {
+      app.advancing = false;
+      if (checkIndex() !== n) return;
+      if (n + 1 < qs.length) { location.replace(`#/check/${n + 1}`); return; }
+      const now = new Date();
+      const week = weekKey(now);
+      const entry = { week, date: isoDate(now), answers: { ...app.answers }, qv: Object.fromEntries(qs.map((x) => [x.id, x.version])) };
+      if (showsExamples()) entry.scenario = scenario();
+      app.store.save(entry);
+      if (isPreview()) { app.store.markTried("checkin"); if (entry.scenario) app.store.markTried(`scenario:${entry.scenario}`); }
+      app.answers = {};
+      location.replace(`#/result/${week}`);
+    }, v === "skip" ? 60 : 180);
+  } else if (el.dataset.scenario) {
+    if (SCENARIO_IDS.includes(el.dataset.scenario)) app.store.setScenario(el.dataset.scenario);
+    refresh(el, `[data-scenario="${el.dataset.scenario}"]`);
+  } else if (el.dataset.lang) {
+    setLang(el.dataset.lang, el, `[data-lang="${el.dataset.lang}"]`);
+  } else if (el.dataset.demo) {
+    app.store.setDemo(el.dataset.demo === "on", el.dataset.demo === "on" ? demoEntries(app.config) : []);
+    refresh(el, "[data-demo]", renderShell);
+  } else if (el.dataset.delete) {
+    const step = el.dataset.delete;
+    if (step === "ask") app.confirmDelete = true;
+    if (step === "no") app.confirmDelete = false;
+    if (step === "yes") {
+      app.store.clearAll();
+      app.answers = {};
+      app.confirmDelete = false;
+      if (isPreview()) {
+        // Start over: the examples come back, the language is kept, the welcome screen shows again.
+        app.store.setLang(app.lang);
+        app.store.setDemo(true, demoEntries(app.config));
+        app.tabScroll = {};
+        applyUni();
+        renderShell();
+        location.replace(isQuivr() ? "#/" : "#/welcome");
+        return;
+      }
+      app.deleted = true;
+    }
+    refresh(el, app.deleted ? '[data-keep="delete"]' : app.confirmDelete ? '[data-delete="no"]' : '[data-delete="ask"]', step === "yes" ? renderShell : null);
+  }
+}
+
+/**
+ * The app runs from its offline copy, so a new version arrives in the background.
+ * When it has taken over, reload once to show it, but never in the middle of a
+ * check-in (answers in progress live in memory): wait until the student leaves it.
+ * Also look for a new version whenever the app comes back to the foreground,
+ * because installed apps on phones are resumed far more often than relaunched.
+ */
+function watchForUpdates() {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  const reloadWhenSafe = () => {
+    if (reloading) return;
+    if (location.hash.startsWith("#/check")) {
+      window.addEventListener("hashchange", function wait() {
+        if (location.hash.startsWith("#/check")) return;
+        window.removeEventListener("hashchange", wait);
+        reloadWhenSafe();
+      });
+      return;
+    }
+    reloading = true;
+    location.reload();
+  };
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController) reloadWhenSafe(); });
+  navigator.serviceWorker.register(`${ROOT}sw.js`).then((reg) => {
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
+  }).catch(() => {});
+}
+
+async function init() {
+  const params = new URLSearchParams(location.search);
+  const id = resolveUniversityId(location.search, document.querySelector('meta[name="cc-university"]')?.content);
+  const { config, fellBack } = await loadConfig(id, fetch, ROOT);
+  app.base = config; app.fellBack = fellBack;
+  let storage = null;
+  try { storage = window.localStorage; } catch { storage = null; }
+  app.store = createStore(storage, config.id);
+  applyUni();
+  // A static language entry (/quivr/en/) opens in its own language unless ?lang= says otherwise.
+  const pageLang = document.querySelector('meta[name="cc-lang"]')?.content;
+  app.lang = pickLanguage(config, { search: params.has("lang") || !pageLang ? location.search : `?lang=${encodeURIComponent(pageLang)}`, stored: app.store.getLang(), browser: navigator.languages || [navigator.language] });
+  app.ui = await loadUi(app.lang);
+  syncShareMeta();
+  if (isPreview()) {
+    if (!app.store.isDemo()) app.store.setDemo(true, demoEntries(config));
+  } else {
+    if (params.get("demo") === "1" && !app.store.isDemo()) app.store.setDemo(true, demoEntries(config));
+    if (params.get("demo") === "0") app.store.setDemo(false);
+  }
+  if (isQuivr()) { document.body.classList.add("qv-mode"); if (isPreview()) app.store.setWelcomed(); buildFrame(); }
+  renderShell();
+  document.addEventListener("click", onClick);
+  window.addEventListener("hashchange", route);
+  if (!isQuivr()) new ResizeObserver(syncDock).observe($("dock"));
+  route();
+  // In-app browsers often have no service worker: the app then simply works online.
+  if (navigator.serviceWorker && (location.protocol === "https:" || location.hostname === "localhost")) {
+    watchForUpdates();
+  }
+}
+
+init().catch((err) => {
+  $("view").innerHTML = `<p class="card">CalmCampus could not start. ${esc(err.message)}</p>`;
+});
