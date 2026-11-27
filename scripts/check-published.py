@@ -7,6 +7,8 @@ into its docs/<demo>/). This checks that:
 1. Every demo folder has an index.html.
 2. Every relative href/src in published/**/*.html points at a file inside the same demo folder.
 3. No page or stylesheet loads anything from another host (plain <a href> links are fine).
+4. No wording CalmCampus does not use ("early signs" and its French and Dutch forms, "stop burnout",
+   detection claims, em dashes) in any page, script, string file or manifest.
 """
 import pathlib, re, sys
 
@@ -38,6 +40,14 @@ for page in sorted(pub.rglob("*.html")):
 for css in pub.rglob("*.css"):
     for url in re.findall(r"url\(\s*['\"]?(https?:[^)'\"]+)", css.read_text()):
         bad.append(f"{css.relative_to(root)}: external url() {url}")
+
+NEVER = [r"early[- ]signs?", r"premiers signes", r"signes? précoces?", r"repérer tôt", r"vroege (?:signalen|tekenen)", r"stop(?:s|ping)? burnout", r"\bdetects?\b", r"\bdétecte", "\u2014"]
+for f in sorted(pub.rglob("*")):
+    if f.suffix in {".html", ".js", ".json", ".css", ".webmanifest"}:
+        text = f.read_text()
+        for pat in NEVER:
+            if re.search(pat, text, re.I):
+                bad.append(f"{f.relative_to(root)}: wording CalmCampus does not use /{pat}/")
 
 print("\n".join(bad) or f"ok ({len(demos)} demos)")
 sys.exit(1 if bad else 0)

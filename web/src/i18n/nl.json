@@ -6,7 +6,7 @@
       "nl": "Nederlands"
     }
   },
-  "disclaimer": "We zijn studenten, geen zorgverleners. CalmCampus stelt geen diagnose en behandelt niet; het helpt studenten om vroege signalen op te merken en de juiste ondersteuning te vinden.",
+  "disclaimer": "We zijn studenten, geen zorgverleners. CalmCampus stelt geen diagnose en behandelt niet. We raden sterk aan om met een huisarts of de studentenbegeleiding te praten.",
   "nav": {
     "home": "Start",
     "history": "Mijn weken",
@@ -28,7 +28,7 @@
   "home": {
     "greeting": "Hallo",
     "title": "Een rustige minuut voor jou",
-    "lead": "Vier ja-of-neevragen over de voorbije week. Het duurt minder dan een minuut, en het helpt je om vroege signalen op te merken en de juiste ondersteuning te vinden.",
+    "lead": "Vier ja-of-neevragen over de voorbije week. Het duurt minder dan een minuut, en het helpt je om op te merken hoe het met je gaat en ondersteuning te vinden.",
     "start": "Start de check-in van deze week",
     "doneTitle": "Je hebt deze week ingecheckt",
     "doneBody": "Bedankt dat je even de tijd nam. Je kunt het opnieuw doen als er iets veranderd is.",
@@ -208,7 +208,7 @@
   },
   "welcome": {
     "title": "Welkom",
-    "lead": "CalmCampus helpt studenten om vroege signalen van stress op te merken en de juiste ondersteuning te vinden. Dit is een preview voor {name}: probeer het zoals een student het zou doen. Het duurt ongeveer vijf minuten.",
+    "lead": "CalmCampus is een wekelijkse check-in die studenten helpt op te merken hoe het met hen gaat en ondersteuning te vinden. Dit is een preview voor {name}: probeer het zoals een student het zou doen. Het duurt ongeveer vijf minuten.",
     "points": [
       "Beantwoord vier ja-of-neevragen over je week. Het duurt minder dan een minuut.",
       "De volledige app kijkt ook naar slaap, stappen en laat telefoongebruik. Hier zijn dat voorbeelden, niet je echte gegevens.",
@@ -223,7 +223,7 @@
   },
   "about": {
     "title": "Over deze preview",
-    "intro": "CalmCampus helpt studenten om vroege signalen van stress op te merken en de juiste ondersteuning te vinden bij {name}. Deze preview toont hoe het zou werken. De voorbije weken en de telefoongegevens zijn voorbeelden. Je eigen antwoorden blijven op deze telefoon.",
+    "intro": "CalmCampus is een wekelijkse check-in die studenten helpt op te merken hoe het met hen gaat en ondersteuning te vinden bij {name}. Deze preview toont hoe het zou werken. De voorbije weken en de telefoongegevens zijn voorbeelden. Je eigen antwoorden blijven op deze telefoon.",
     "tryHeading": "Dingen om te proberen",
     "try": [
       {
