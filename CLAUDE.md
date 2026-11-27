@@ -23,6 +23,12 @@ cc.braunf.com is the GitHub Pages site of CalmWeb (custom domain, behind Cloudfl
 
 Never rename or remove a published folder: the URLs (`/quivr/`, `/quivr/?lang=en`, `/demo/`, `/epfl/`, `/unil/`) have been sent to universities.
 
+## Own Pages site and the calmcampus.app move (prepared, not live yet)
+
+- `.github/workflows/pages.yml` publishes `published/` as this repo's own GitHub Pages site on every push to `main`: today at `https://calmcampus-fv.github.io/CalmUni/<demo>/`. `published/index.html` is a small landing page for the root.
+- Planned custom domain: `uni.calmcampus.app` (in `published/CNAME`). With an Actions deploy GitHub ignores that file; the domain is switched on in Settings > Pages only after its DNS record exists, so nothing breaks before then.
+- The links already sent (`cc.braunf.com/quivr/`, `/quivr/?lang=en`, `/demo/`, `/epfl/`, `/unil/`) keep being served by CalmWeb from its copies in `docs/<demo>/`. Keep syncing CalmWeb after every demo change until Florian decides those copies can become redirects.
+
 ## Commands
 
 ```bash
@@ -37,7 +43,7 @@ CI (`.github/workflows/ci.yml`) runs both on every branch. `.github/workflows/cl
 - Never claim pilots, results, partnerships or detection. No "early signs", no "stop burnout", no claim that CalmCampus finds burnout or gets students to seek help. Wellness wording only ("supports").
 - Every user-facing surface carries the full disclaimer: we are students, not medical professionals; CalmCampus does not diagnose or treat; we strongly suggest a doctor or student support.
 - The check-in takes less than a minute. Answers stay on the phone (in the browser's local storage for the web preview); nothing is sent anywhere.
-- No em dashes. Names: Florian Braùn (with the ù) and Hélène David.
+- No em dashes. `web/scripts/check.mjs` and `scripts/check-published.py` fail CI on "early signs" (and its French and Dutch forms), "stop burnout", detection wording and em dashes.
+- Names: Florian Braùn (with the ù) and Hélène David.
 - No third-party scripts, fonts, analytics or embeds. Labelled example data is allowed only in preview builds and is always marked Example.
 
-Known issue: the current `web/` source and the published copies still use "early signs" in the disclaimer and descriptions (`web/src/index.html`, `web/scripts/build.mjs`, `web/scripts/check.mjs`, the i18n strings). Fix it in `web/`, rebuild, then republish; do not hand-edit `published/`.

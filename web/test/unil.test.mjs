@@ -36,7 +36,7 @@ test("phone data never changes the result, skipped questions do not count", () =
 
 test("French only, gentle wording, no claims", () => {
   for (const w of [/\b(Next|Back|Skip|Submit|Cancel|Close|Open|Start|Later|Settings|Example|Mockup|Welcome|Privacy)\b/,
-    /burn-?out/i, /diagnos/i, /d[ée]tect/i, /\bGDPR\b|\bRGPD\b/, /intelligence artificielle|\bIA\b|\bAI\b/,
+    /burn-?out/i, /diagnos(?!tic et ne soigne pas)/i, /d[ée]tect/i, /\bGDPR\b|\bRGPD\b/, /intelligence artificielle|\bIA\b|\bAI\b/,
     /pilote|partenariat|utilisateurs|r[ée]compense|badge|s[ée]rie de|streak/i, /seconde/i, /urgent·e|alarm|danger|risque/i]) {
     assert.ok(!w.test(text), `forbidden wording ${w}`);
   }
@@ -50,7 +50,7 @@ test("French only, gentle wording, no claims", () => {
 });
 
 test("the disclaimer, contact and footer are there", () => {
-  const disc = "CalmCampus est un prototype. Nous ne sommes pas des professionnels de santé. En cas de besoin, parlez à un médecin ou aux services de l’UNIL.";
+  const disc = "CalmCampus est un prototype. Nous sommes des étudiant·es, pas des professionnel·les de santé. CalmCampus ne pose pas de diagnostic et ne soigne pas. Nous vous conseillons vivement de parler à un médecin ou aux services de l’UNIL.";
   assert.ok(html.includes(disc) && js.includes(disc));
   assert.match(html, /mailto:florian@calm\.braunf\.com/);
   assert.match(html, /Florian Braùn/);
