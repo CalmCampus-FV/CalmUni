@@ -11,7 +11,7 @@ npm test          # unit tests: scoring, weeks, storage, example data, phone sig
 npm run build     # check + build into dist/ (default at the root, one folder per university)
 npm run dev       # build and serve dist/ at http://localhost:8080
 npm run e2e       # end to end in WebKit and Chromium (phones, a desktop window, offline)
-E2E_URL=https://cc.braunf.com/<id>/ npm run e2e     # the same checks against a deployed copy
+E2E_URL=https://uni.calmcampus.app/<id>/ npm run e2e     # the same checks against a deployed copy
 ```
 
 Node 20+. No `npm install` is needed to build or run. Playwright is only needed for `npm run e2e` and `scripts/make-icons.mjs`; install it outside the project's dependencies with `npm i --no-save playwright && npx playwright install webkit chromium`. CI (`.github/workflows/ci.yml`, job `web`) runs check, test, build and e2e.
@@ -72,9 +72,9 @@ Phone signals never answer a question and never change the result: the level com
 
 Checklist before sending to a university: every `todo` is resolved or accepted, a staff member there has confirmed the service details, and the contact email in `feedback` is one you read.
 
-## Deploying to cc.braunf.com
+## Deploying to uni.calmcampus.app
 
-The site is GitHub Pages from `docs/` in the [CalmWeb](https://github.com/CalmCampus-FV/CalmWeb) repo. This repo (CalmUni) is the source: the files that go live are kept in `published/<id>/` at the root of this repo, and CalmWeb copies them into its `docs/<id>/`. From the university's branch, copy only its folder, never all of `dist/` (that would mix every university into one folder):
+The files that go live are kept in `published/<id>/` at the root of the main branch. CalmUni's own Pages site serves them at `https://uni.calmcampus.app/<id>/` (the address in `publicUrl` and the QR codes), and the website in the [CalmWeb](https://github.com/CalmCampus-FV/CalmWeb) repo keeps a copy in its `docs/<id>/`, so the links already sent on cc.braunf.com keep working. From the university's branch, copy only its folder, never all of `dist/` (that would mix every university into one folder):
 
 ```bash
 cd web && npm run build                       # on the university's branch
@@ -87,7 +87,7 @@ bash scripts/sync-demos.sh                    # copies published/<demo>/ from Ca
 
 The general preview (the `default` config, linked from the site's home page) is published the same way, from `main` only, into `published/demo/` (copy `web/dist/` without the university folders).
 
-Pages publishes within a minute or two; then `E2E_URL=https://cc.braunf.com/<id>/ npm run e2e` (or `/demo/` with `E2E_UNI=default`) checks the live copy. Every preview is `noindex`: search engines index the site's home page, which links to the demo. Installed apps update themselves: the service worker fetches the new files past the browser cache, and the page reloads once the new version is ready (never during a check-in). The build version is shown at the bottom of About, so a tester can tell which build a phone runs.
+Pages publishes within a minute or two; then `E2E_URL=https://uni.calmcampus.app/<id>/ npm run e2e` (or `/demo/` with `E2E_UNI=default`) checks the live copy. Every preview is `noindex`: search engines index the site's home page, which links to the demo. Installed apps update themselves: the service worker fetches the new files past the browser cache, and the page reloads once the new version is ready (never during a check-in). The build version is shown at the bottom of About, so a tester can tell which build a phone runs.
 
 ## Accessibility
 

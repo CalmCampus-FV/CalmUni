@@ -8,7 +8,7 @@ Written 2026-11-14, updated 2026-11-15 after the final polish pass. Made by Flor
 
 A reviewer preview of CalmCampus made for Quivr (the Flemish student app by Student Innovations vzw) to look at. It is **not a Quivr feature, there is no pilot, and Quivr has not agreed to anything**. The app says so on the welcome screen and on the Quivr view ("Mockup: how this could look in Quivr, not a live Quivr feature"). Never claim a pilot, results, users, awards or a partnership in the app, in docs or in commits.
 
-Live at `https://cc.braunf.com/quivr/` (noindex, not linked from the site's home page).
+Live at `https://uni.calmcampus.app/quivr/` (noindex, not linked from the site's home page).
 
 **Branches.** This branch (`quivr-web-demo`) is `main` plus what is Quivr-specific: `config/universities/quivr.json`, `config/qr/quivr.svg`, `test/quivr.test.mjs` and this file. App changes go on `main` (through a feature branch) and are merged from `main` into this branch, never the other way. No "Co-Authored-By" trailer in commits. The repo is public: no names of people at Quivr or at universities, and nothing they told us in confidence beyond what the app already says.
 
@@ -68,6 +68,6 @@ cd web
 npm run check && npm test && npm run build
 npm i --no-save playwright@1.48.2 axe-core@4.10.2 && npx playwright install webkit chromium   # once
 npm run e2e                                          # local (Quivr: every language, every university, pages, guide)
-E2E_URL=https://cc.braunf.com/quivr/ npm run e2e     # live
+E2E_URL=https://uni.calmcampus.app/quivr/ npm run e2e     # live
 rsync -a --delete dist/quivr/ ../../_CalmWeb/docs/quivr/   # deploy, then check-site.py, commit, push _CalmWeb
 ```
