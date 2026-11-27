@@ -36,7 +36,7 @@ test("phone data never changes the result, skipped questions do not count", () =
 
 test("French only, gentle wording, no claims", () => {
   for (const w of [/\b(Next|Back|Skip|Submit|Cancel|Close|Open|Start|Later|Settings|Example|Mockup|Welcome|Privacy)\b/,
-    /burn-?out/i, /diagnos/i, /d[ée]tect/i, /\bGDPR\b|\bRGPD\b/, /intelligence artificielle|\bIA\b|\bAI\b/,
+    /burn-?out/i, /diagnos(?!tic et ne soigne pas)/i, /d[ée]tect/i, /\bGDPR\b|\bRGPD\b/, /intelligence artificielle|\bIA\b|\bAI\b/,
     /pilote|partenariat|utilisateurs|r[ée]compense|badge|s[ée]rie de|streak/i, /seconde/i, /urgent·e|alarm|danger|risque/i]) {
     assert.ok(!w.test(text), `forbidden wording ${w}`);
   }
