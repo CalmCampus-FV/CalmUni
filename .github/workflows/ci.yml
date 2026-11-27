@@ -3,6 +3,7 @@ name: CI
 on:
   # Every branch: main and each university's branch (<id>-web-demo) are checked.
   push:
+  workflow_dispatch:
   pull_request:
 
 jobs:
