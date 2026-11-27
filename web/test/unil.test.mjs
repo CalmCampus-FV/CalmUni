@@ -50,7 +50,7 @@ test("French only, gentle wording, no claims", () => {
 });
 
 test("the disclaimer, contact and footer are there", () => {
-  const disc = "CalmCampus est un prototype. Nous ne sommes pas des professionnels de santé. En cas de besoin, parlez à un médecin ou aux services de l’UNIL.";
+  const disc = "CalmCampus est un prototype. Nous sommes des étudiant·es, pas des professionnel·les de santé. CalmCampus ne pose pas de diagnostic et ne soigne pas. Nous vous conseillons vivement de parler à un médecin ou aux services de l’UNIL.";
   assert.ok(html.includes(disc) && js.includes(disc));
   assert.match(html, /mailto:florian@calm\.braunf\.com/);
   assert.match(html, /Florian Braùn/);
