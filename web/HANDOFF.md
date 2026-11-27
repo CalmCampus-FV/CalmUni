@@ -8,7 +8,7 @@ Written 2026-11-18. Made by Florian Braùn and Hélène David.
 
 A one-page demo for the Université de Lausanne (UNIL): the Service d'orientation et carrières, its psychologists and student services. It shows how CalmCampus could look as a **small, discreet part of the official "UNIL Campus" app** instead of a separate app. It is **a mockup**. It is not the UNIL Campus app, there is no pilot, and UNIL has not agreed to anything. The page says so in a bar at the top: "Maquette : à quoi CalmCampus pourrait ressembler dans UNIL Campus. Ce n'est pas l'app officielle." Never claim a pilot, users, results, partnerships or awards. No UNIL logo is used.
 
-- **Live:** https://cc.braunf.com/unil/ (noindex, nofollow; not linked from the site's home page, not in the sitemap)
+- **Live:** https://uni.calmcampus.app/unil/ (noindex, nofollow; not linked from the site's home page, not in the sitemap)
 - **Code:** branch `unil-web-demo` in `lumenworksco/-CalmCampus`, made from `quivr-web-demo`. The deployed build is commit `95e777b`. This file was added in the next commit.
 - **Deploy:** `_CalmWeb` commit `019f43e` ("unil preview: first version (CalmCampus 95e777b)"). Only `docs/unil/` was added. Quivr, EPFL and the general demo were not touched or redeployed.
 
@@ -78,6 +78,6 @@ cd web
 npm run build:unil                                   # unit tests + build dist/unil/
 npm i --no-save playwright@1.48.2 axe-core@4.10.2    # once
 npm run e2e:unil                                     # local
-E2E_URL=https://cc.braunf.com/unil/ npm run e2e:unil # live
+E2E_URL=https://uni.calmcampus.app/unil/ npm run e2e:unil # live
 rsync -a --delete dist/unil/ ../../_CalmWeb/docs/unil/   # deploy, then check-site.py, commit, push _CalmWeb
 ```

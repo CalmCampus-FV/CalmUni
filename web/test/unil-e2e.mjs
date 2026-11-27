@@ -5,7 +5,7 @@
 //
 //   npm i --no-save playwright axe-core && npx playwright install webkit chromium
 //   node scripts/build-unil.mjs && node test/unil-e2e.mjs
-//   E2E_URL=https://cc.braunf.com/unil/ node test/unil-e2e.mjs
+//   E2E_URL=https://uni.calmcampus.app/unil/ node test/unil-e2e.mjs
 //   SHOTS=<dir> also saves a screenshot of each case's final screen.
 import { chromium, webkit } from "playwright";
 import { spawn } from "node:child_process";
