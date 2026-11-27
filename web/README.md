@@ -79,7 +79,7 @@ The site is GitHub Pages from `docs/` in the [CalmWeb](https://github.com/CalmCa
 ```bash
 cd web && npm run build                       # on the university's branch
 # then, on a branch made from main:
-rsync -a --delete web/dist/<id>/ published/<id>/
+rm -rf published/<id> && cp -R web/dist/<id> published/<id>
 python3 scripts/check-published.py            # open a PR, CI green, squash-merge
 # then in a CalmWeb checkout:
 bash scripts/sync-demos.sh                    # copies published/<demo>/ from CalmUni main into docs/<demo>/
