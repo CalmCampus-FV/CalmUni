@@ -23,11 +23,10 @@ cc.braunf.com is the GitHub Pages site of CalmWeb (custom domain, behind Cloudfl
 
 Never rename or remove a published folder: the URLs (`/quivr/`, `/quivr/?lang=en`, `/demo/`, `/epfl/`, `/unil/`) have been sent to universities.
 
-## Own Pages site and the calmcampus.app move (prepared, not live yet)
+## Own Pages site at uni.calmcampus.app
 
-- `.github/workflows/pages.yml` publishes `published/` as this repo's own GitHub Pages site on every push to `main`: today at `https://calmcampus-fv.github.io/CalmUni/<demo>/`. `published/index.html` is a small landing page for the root.
-- Planned custom domain: `uni.calmcampus.app` (in `published/CNAME`). With an Actions deploy GitHub ignores that file; the domain is switched on in Settings > Pages only after its DNS record exists, so nothing breaks before then.
-- The links already sent (`cc.braunf.com/quivr/`, `/quivr/?lang=en`, `/demo/`, `/epfl/`, `/unil/`) keep being served by CalmWeb from its copies in `docs/<demo>/`. Keep syncing CalmWeb after every demo change until Florian decides those copies can become redirects.
+- `.github/workflows/pages.yml` publishes `published/` as this repo's own GitHub Pages site on every push to `main`, at **https://uni.calmcampus.app/<demo>/** (custom domain, HTTPS enforced; `calmcampus-fv.github.io/CalmUni/` redirects there). `published/index.html` is the landing page for the root; `published/CNAME` holds the domain.
+- The links already sent (`cc.braunf.com/quivr/`, `/quivr/?lang=en`, `/demo/`, `/epfl/`, `/unil/`) keep being served by CalmWeb from its copies in `docs/<demo>/` (and keep working after the main site moves to calmcampus.app, through a path-preserving redirect). Keep syncing CalmWeb after every demo change.
 
 ## Commands
 

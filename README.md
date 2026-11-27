@@ -19,7 +19,7 @@ Each university's version lives on its own branch, `<id>-web-demo`. `main` holds
 
 ## How a demo goes live
 
-The demos are served at cc.braunf.com by the [CalmWeb](https://github.com/CalmCampus-FV/CalmWeb) Pages site, so every link already sent keeps its address. This repo is the source: build here, copy the build into `published/<id>/`, then run `scripts/sync-demos.sh` in CalmWeb and merge that PR. CalmWeb's CI checks that its copy matches `published/` here. Details in [AGENTS.md](AGENTS.md).
+The demos are live at [uni.calmcampus.app](https://uni.calmcampus.app/) (this repo's own Pages site, published on every push to `main`). The links already sent on cc.braunf.com are served by the [CalmWeb](https://github.com/CalmCampus-FV/CalmWeb) Pages site, so they keep their address. This repo is the source: build here, copy the build into `published/<id>/`, then run `scripts/sync-demos.sh` in CalmWeb and merge that PR. CalmWeb's CI checks that its copy matches `published/` here. Details in [AGENTS.md](AGENTS.md).
 
 ## Related repositories
 

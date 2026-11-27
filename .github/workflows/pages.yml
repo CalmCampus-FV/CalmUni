@@ -1,9 +1,8 @@
 name: Pages
 
 # Publishes published/ as this repo's own GitHub Pages site.
-# Today: https://calmcampus-fv.github.io/CalmUni/<demo>/ . Planned custom domain: uni.calmcampus.app
-# (see published/CNAME and AGENTS.md). With an Actions deploy, GitHub ignores the CNAME file:
-# the custom domain is switched on in Settings > Pages only once its DNS record exists.
+# Live at https://uni.calmcampus.app/<demo>/ (custom domain set in Settings > Pages; with an Actions
+# deploy GitHub ignores published/CNAME, which documents the domain).
 # The links already sent (cc.braunf.com/<demo>/) keep being served by CalmWeb.
 on:
   push:
