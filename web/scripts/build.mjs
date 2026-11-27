@@ -77,7 +77,7 @@ function buildOne(id, out) {
   writeFileSync(path.join(out, "manifest.webmanifest"), JSON.stringify({
     name: "CalmCampus",
     short_name: "CalmCampus",
-    description: "Notice early signs and reach the right campus support. Your answers stay on your device.",
+    description: "A weekly check-in that helps students notice how they're doing and find support. Your answers stay on your phone.",
     start_url: "./",
     scope: "./",
     display: "standalone",

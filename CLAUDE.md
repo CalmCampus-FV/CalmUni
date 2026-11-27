@@ -43,7 +43,7 @@ CI (`.github/workflows/ci.yml`) runs both on every branch. `.github/workflows/cl
 - Never claim pilots, results, partnerships or detection. No "early signs", no "stop burnout", no claim that CalmCampus finds burnout or gets students to seek help. Wellness wording only ("supports").
 - Every user-facing surface carries the full disclaimer: we are students, not medical professionals; CalmCampus does not diagnose or treat; we strongly suggest a doctor or student support.
 - The check-in takes less than a minute. Answers stay on the phone (in the browser's local storage for the web preview); nothing is sent anywhere.
-- No em dashes. Names: Florian Braùn (with the ù) and Hélène David.
+- No em dashes. `web/scripts/check.mjs` and `scripts/check-published.py` fail CI on "early signs" (and its French and Dutch forms), "stop burnout", detection wording and em dashes.
+- Names: Florian Braùn (with the ù) and Hélène David.
 - No third-party scripts, fonts, analytics or embeds. Labelled example data is allowed only in preview builds and is always marked Example.
 
-Known issue: the current `web/` source and the published copies still use "early signs" in the disclaimer and descriptions (`web/src/index.html`, `web/scripts/build.mjs`, `web/scripts/check.mjs`, the i18n strings). Fix it in `web/`, rebuild, then republish; do not hand-edit `published/`.
