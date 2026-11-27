@@ -35,7 +35,7 @@ Node 20+. No `npm install` is needed to build or run. Playwright is only needed 
 
 Opened inside another app's own browser (an iOS WKWebView or an Android WebView, for example from a student app's link), the app hides the home-screen steps, works without a service worker, and falls back to memory if storage is switched off. `npm run e2e` checks the check-in in both.
 
-Phone signals never answer a question and never change the result: the level comes from the student's answers alone. They only decide which question comes first and what context is shown. A browser cannot read Apple Health, Screen Time or Health Connect, so the web preview uses examples; the native iOS app in `../ios/` reads sleep and steps for real.
+Phone signals never answer a question and never change the result: the level comes from the student's answers alone. They only decide which question comes first and what context is shown. A browser cannot read Apple Health, Screen Time or Health Connect, so the web preview uses examples; the native iOS app ([CalmApp](https://github.com/CalmCampus-FV/CalmApp)) is where real phone data belongs.
 
 ## Choosing a university
 
@@ -74,21 +74,18 @@ Checklist before sending to a university: every `todo` is resolved or accepted, 
 
 ## Deploying to cc.braunf.com
 
-The site is GitHub Pages from `docs/` in the [`_CalmWeb`](https://github.com/lumenworksco/_CalmWeb) repo. From the university's branch, copy only its folder, never all of `dist/` (that would overwrite the site root):
+The site is GitHub Pages from `docs/` in the [CalmWeb](https://github.com/CalmCampus-FV/CalmWeb) repo. This repo (CalmUni) is the source: the files that go live are kept in `published/<id>/` at the root of this repo, and CalmWeb copies them into its `docs/<id>/`. From the university's branch, copy only its folder, never all of `dist/` (that would mix every university into one folder):
 
 ```bash
-cd web && npm run build
-rsync -a --delete dist/<id>/ ../../_CalmWeb/docs/<id>/
-cd ../../_CalmWeb && python3 scripts/check-site.py
-git add docs/<id> && git commit -m "<id> preview: <what changed>" && git push origin main
+cd web && npm run build                       # on the university's branch
+# then, on a branch made from main:
+rsync -a --delete web/dist/<id>/ published/<id>/
+python3 scripts/check-published.py            # open a PR, CI green, squash-merge
+# then in a CalmWeb checkout:
+bash scripts/sync-demos.sh                    # copies published/<demo>/ from CalmUni main into docs/<demo>/
 ```
 
-The general preview (the `default` config, linked from the site's home page) is deployed the same way, from `main` only (there `dist/` holds nothing but the general preview), into `docs/demo/`:
-
-```bash
-cd web && npm run build
-rsync -a --delete dist/ ../../_CalmWeb/docs/demo/
-```
+The general preview (the `default` config, linked from the site's home page) is published the same way, from `main` only, into `published/demo/` (copy `web/dist/` without the university folders).
 
 Pages publishes within a minute or two; then `E2E_URL=https://cc.braunf.com/<id>/ npm run e2e` (or `/demo/` with `E2E_UNI=default`) checks the live copy. Every preview is `noindex`: search engines index the site's home page, which links to the demo. Installed apps update themselves: the service worker fetches the new files past the browser cache, and the page reloads once the new version is ready (never during a check-in). The build version is shown at the bottom of About, so a tester can tell which build a phone runs.
 
