@@ -18,7 +18,7 @@ CalmUni is the source of truth for the CalmCampus university demos and prototype
 cc.braunf.com is the GitHub Pages site of CalmWeb (custom domain, behind Cloudflare). Pages from this repo would not appear under that domain, so CalmWeb keeps the served copy and this repo is the source:
 
 1. On the university branch: `cd web && npm run check && npm test && npm run build`.
-2. On a branch from `main`: copy only that demo's build into `published/<id>/` (for example `rsync -a --delete web/dist/<id>/ published/<id>/`; the general preview goes from `web/dist/` on `main` into `published/demo/`, without the university folders). Open a PR, CI green, squash-merge.
+2. On a branch from `main`: copy only that demo's build into `published/<id>/` (for example `rm -rf published/<id> && cp -R web/dist/<id> published/<id>`; the general preview goes from `web/dist/` on `main` into `published/demo/`, without the university folders). Open a PR, CI green, squash-merge.
 3. In CalmWeb: `bash scripts/sync-demos.sh`, open a PR, CI green (its demo sync check compares `docs/<demo>/` with `published/<demo>/` here), squash-merge. Pages publishes within a few minutes.
 
 Never rename or remove a published folder: the URLs (`/quivr/`, `/quivr/?lang=en`, `/demo/`, `/epfl/`, `/unil/`) have been sent to universities.
