@@ -25,7 +25,7 @@ Written 2026-11-13, last updated 2026-11-13. Read this, then `web/README.md` and
 
 Let EPFL's student services (Consultation sociale) try a preview on their own phones for a few days and review it with colleagues and the student association AGEPoly. This is a reviewer preview, not a pilot: no real student data, no analytics. Every future university should be a config file, not a code change.
 
-Team: Florian Braun and Helene David. CalmCampus is not medical: it does not diagnose or treat, it helps students notice early signs and points them to the right campus support.
+Team: Florian Braùn and Hélène David. We are students, not medical professionals. CalmCampus does not diagnose or treat; it is a weekly check-in that helps students notice how they're doing and find support. We strongly suggest speaking to a doctor or student support.
 
 ## Done
 

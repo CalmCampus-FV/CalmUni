@@ -59,9 +59,26 @@ for (const lang of uiLangs) {
   for (const k of Object.keys(ui[lang])) if (!(k in ui.en)) err(`i18n/${lang}`, `extra key ${k}`);
   for (const [k, v] of Object.entries(ui[lang])) lintVoice(v, lang, `i18n/${lang}.${k}`);
 }
-if (!ui.en.disclaimer.startsWith("We are students, not medical professionals. CalmCampus does not diagnose or treat; it helps students notice early signs and reach the right support.")) {
+if (!ui.en.disclaimer.startsWith("We are students, not medical professionals. CalmCampus does not diagnose or treat. We strongly suggest speaking to a doctor or student support.")) {
   err("i18n/en", "disclaimer text must match the agreed wording exactly");
 }
+
+/* ---------- Wording CalmCampus never uses ---------- */
+// No "early signs" (or its French and Dutch forms), no "stop burnout", no detection claims, no em dashes.
+// Checked in every source file and, on main, in the published copies at ../published.
+const NEVER = [/early[- ]signs?/i, /premiers signes/i, /signes? précoces?/i, /repérer tôt/i, /vroege (?:signalen|tekenen)/i, /stop(?:s|ping)? burnout/i, /\bdetects?\b/i, /\bdétecte/i, /\u2014/];
+function scanWording(dir, label, base = dir) {
+  if (!existsSync(dir)) return;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) { if (!["node_modules", "dist", "test"].includes(entry.name)) scanWording(p, label, base); continue; }
+    if (!/\.(json|html|js|mjs|css|webmanifest)$/.test(entry.name) || p === fileURLToPath(import.meta.url)) continue;
+    const text = readFileSync(p, "utf8");
+    for (const re of NEVER) if (re.test(text)) err(`${label}/${path.relative(base, p)}`, `wording CalmCampus does not use: ${re}`);
+  }
+}
+scanWording(root, "web");
+scanWording(path.join(root, "..", "published"), "published");
 
 /* ---------- University configs ---------- */
 const cfgDir = path.join(root, "config/universities");
